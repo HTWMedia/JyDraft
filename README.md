@@ -1,5 +1,5 @@
 # JyDraft
-查看剪映(jianying)加密后的草稿(draft)明文的小工具。
+查看剪映(jianying)加密后的草稿(draft)明文的小工具，可在右侧release中下载。
 
 # 使用方法：
 
