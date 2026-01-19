@@ -1,3 +1,5 @@
+[English](README_EN.md) | 中文
+
 # JyDraft
 
 **JyDraft** 是一个用于 **生成剪映（Jianying / CapCut）草稿（Draft）并基于草稿直接渲染导出视频** 的工具集。  
