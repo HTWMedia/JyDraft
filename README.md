@@ -128,7 +128,7 @@ var json = script.Dumps();
 
 ### 申请 API Key
 
-POST /auth/applykey?email=user@example.com
+POST http://14.103.233.252/auth/applykey?email=user@example.com
 
 必要请求头:
 X-App-Source: HDraft
@@ -149,7 +149,7 @@ X-API-KEY: <您的 API Key>
 ```python
 import requests, time
 
-BASE_URL = "http://localhost"
+BASE_URL = "http://14.103.233.252"
 API_KEY = "your_key"
 
 headers = {"X-API-KEY": API_KEY}
