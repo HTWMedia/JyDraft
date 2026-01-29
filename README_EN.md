@@ -135,42 +135,112 @@ The resulting `json` string is the complete **Jianying draft file (`draft_conten
 
 ## 2. Render and Export Videos (HDraft Tool)
 
-The **HDraft** tool (available in Releases) is used to batch-render Jianying drafts into video files.
+# 🚀 Draft-to-Video API Service
 
-### Usage Steps
+## 📌 Overview
 
-#### 1️⃣ Configure Draft Paths
+A professional API service for **automated video rendering** from **JSON drafts** and **media assets**.
+Designed for programmatic video generation, batch rendering, and pipeline integration.
 
-Edit `config.ini` and specify one or more draft paths, separated by `|`:
+---
 
-```ini
-C:\Users\xx\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\Jan19\draft_content.json|
-C:\Users\xx\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\Jan18\draft_content.json
+## 🔑 Authentication
+
+### Apply for API Key
+
+POST /auth/applykey?email=user@example.com
+
+Required Header:
+X-App-Source: HDraft
+
+### Request Usage
+
+All subsequent API requests must include:
+
+X-API-KEY: <your_received_key>
+
+---
+
+## 💻 Code Examples
+
+### C# Example
+
+```csharp
+var client = new DraftVideoClient();
+await client.RequestApiKeyAsync("user@example.com");
+
+client.SetApiKey("your_email_key");
+
+string[] assets = Directory.GetFiles("./assets");
+Guid draftId = await client.UploadDraftAsync(
+    "My Project",
+    "./draft.json",
+    assets
+);
+
+await client.PollRenderStatusAsync(draftId);
+```
+
+### Python Example
+
+```python
+import requests, time
+
+BASE_URL = "http://localhost"
+API_KEY = "your_key"
+
+headers = {"X-API-KEY": API_KEY}
+
+files = [('jsonFile', open('draft.json','rb'))]
+files.append(('assets', open('video.mp4','rb')))
+
+r = requests.post(
+    f"{BASE_URL}/home/UploadDraftPackage",
+    headers=headers,
+    data={'title':'Demo'},
+    files=files
+)
+
+draft_id = r.json()['draftId']
+
+task_id = requests.post(
+    f"{BASE_URL}/home/startrender",
+    params={'draftId': draft_id},
+    headers=headers
+).json()['taskId']
+
+while True:
+    status = requests.get(
+        f"{BASE_URL}/home/getstatus",
+        params={'taskId': task_id},
+        headers=headers
+    ).json()
+    if status['status'] == 'completed':
+        print(status['downloadUrl'])
+        break
+    time.sleep(5)
 ```
 
 ---
 
-#### 2️⃣ Tool Capabilities
+## 📡 API Endpoints
 
-- Automatically decrypts encrypted drafts
-- Supports both manually created and code-generated drafts
-- Step-by-step progress output for easy tracking
-- Supports concurrent exporting
-- No Jianying installation required
-- Cloud-based rendering
-
----
-
-#### 3️⃣ Output
-
-- Exported videos are saved in the same directory as the draft
-- Output file naming format:
-
-```
-GeneratedVideo_<timestamp>.mp4
-```
+| Route | Method | Description |
+|------|--------|-------------|
+| /auth/applykey | POST | Apply for API Key |
+| /home/UploadDraftPackage | POST | Upload draft and assets |
+| /home/startrender | POST | Start render task |
+| /home/getstatus | GET | Query render status |
 
 ---
+
+## ❗ Error Codes
+
+| Code | Meaning |
+|-----|--------|
+| 401 | Invalid or missing API Key |
+| 400 | Invalid parameters |
+| 500 | Internal server error |
 
 ## ⚠️ Notes
 
