@@ -148,7 +148,7 @@ Designed for programmatic video generation, batch rendering, and pipeline integr
 
 ### Apply for API Key
 
-POST /auth/applykey?email=user@example.com
+POST http://auth/applykey?email=user@example.com
 
 Required Header:
 X-App-Source: HDraft
@@ -186,7 +186,7 @@ await client.PollRenderStatusAsync(draftId);
 ```python
 import requests, time
 
-BASE_URL = "http://localhost"
+BASE_URL = "http://14.103.233.252"
 API_KEY = "your_key"
 
 headers = {"X-API-KEY": API_KEY}
