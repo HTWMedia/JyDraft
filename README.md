@@ -139,6 +139,7 @@ X-App-Source: HDraft
 
 X-API-KEY: <您的 API Key>
 
+user@example.com换成自己真实的email，以便接收API Key。
 ---
 
 ## 💻 调用示例
