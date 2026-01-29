@@ -112,36 +112,99 @@ var json = script.Dumps();
 
 ---
 
-## 二、草稿渲染与视频导出（HDraft 工具）
+## 二、草稿渲染与视频导出（HDraft API）
 
-### 使用步骤
+# 🚀 Draft-to-Video 自动渲染 API 服务
 
-#### 1️⃣ 配置草稿路径
+## 📌 简介
 
-```ini
-C:\Users\xx\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\1月19日\draft_content.json|
-C:\Users\xx\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\1月18日\draft_content.json
-```
+一个专业的 **自动化视频渲染 API 服务**，
+支持通过 **JSON 草稿文件** 与 **媒体素材** 自动合成并生成视频，
+适用于批量生成、自动化流水线和系统集成。
 
-#### 2️⃣ 工具特性说明
+---
 
-- 自动识别并解密 **加密草稿**
-- 支持代码生成的草稿文件
-- 导出过程分步骤提示，便于排查问题
-- 支持多草稿 **并发导出**
-- 无需安装剪映客户端
-- 云端渲染，对本地机器性能要求低
+## 🔑 身份验证
 
-#### 3️⃣ 导出结果
+### 申请 API Key
 
-- 导出的视频文件位于 **草稿所在目录**
-- 文件命名格式：
+POST /auth/applykey?email=user@example.com
 
-```
-生成视频_时间戳.mp4
+必要请求头:
+X-App-Source: HDraft
+
+### 调用方式
+
+所有后续接口必须在 Header 中携带:
+
+X-API-KEY: <您的 API Key>
+
+---
+
+## 💻 调用示例
+
+
+### Python 示例
+
+```python
+import requests, time
+
+BASE_URL = "http://localhost"
+API_KEY = "your_key"
+
+headers = {"X-API-KEY": API_KEY}
+
+files = [('jsonFile', open('draft.json','rb'))]
+files.append(('assets', open('video.mp4','rb')))
+
+res = requests.post(
+    f"{BASE_URL}/home/UploadDraftPackage",
+    headers=headers,
+    data={'title':'示例'},
+    files=files
+)
+
+draft_id = res.json()['draftId']
+
+task_id = requests.post(
+    f"{BASE_URL}/home/startrender",
+    params={'draftId': draft_id},
+    headers=headers
+).json()['taskId']
+
+while True:
+    status = requests.get(
+        f"{BASE_URL}/home/getstatus",
+        params={'taskId': task_id},
+        headers=headers
+    ).json()
+    if status['status'] == 'completed':
+        print(status['downloadUrl'])
+        break
+    time.sleep(5)
 ```
 
 ---
+
+## 📡 接口说明
+
+| 接口地址 | 方法 | 说明 |
+|---------|------|------|
+| /auth/applykey | POST | 申请 API Key |
+| /home/UploadDraftPackage | POST | 上传草稿与素材 |
+| /home/startrender | POST | 启动渲染 |
+| /home/getstatus | GET | 查询进度 |
+
+---
+
+## ❗ 常见错误码
+
+| 错误码 | 说明 |
+|------|------|
+| 401 | API Key 无效或缺失 |
+| 400 | 参数错误 |
+| 500 | 服务器内部错误 |
+
 
 ## 📄 License
 
