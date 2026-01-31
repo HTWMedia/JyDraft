@@ -128,7 +128,7 @@ var json = script.Dumps();
 
 ### 申请 API Key
 
-POST http://14.103.233.252/auth/applykey?email=user@example.com
+POST https://htwmedia.dpdns.org/auth/applykey?email=user@example.com
 
 必要请求头:
 X-App-Source: HDraft
@@ -150,7 +150,7 @@ user@example.com换成自己真实的email，以便接收API Key。
 ```python
 import requests, time
 
-BASE_URL = "http://14.103.233.252"
+BASE_URL = "https://htwmedia.dpdns.org"
 API_KEY = "your_key"
 
 headers = {"X-API-KEY": API_KEY}
