@@ -6,7 +6,7 @@
 **JyDraft** is a toolkit for **generating Jianying / CapCut draft files and rendering them directly into videos**.
 It allows you to programmatically generate draft files and render videos in the cloud **without installing the CapCut client**.
 
-👉 Precompiled rendering tools can be downloaded from the **Releases** page on the right.
+👉 Precompiled rendering tools can be downloaded from the **Releases** page.
 
 ---
 
@@ -15,7 +15,7 @@ It allows you to programmatically generate draft files and render videos in the 
 * Generate CapCut draft files (`draft_content.json`) using C#
 * Support for audio, video, GIF, and text tracks and segments
 * Support transitions, animations, subtitle bubbles, background filling, and more
-* ✅ Built-in support for **automatic decryption of encrypted drafts**
+* Built-in support for **automatic decryption of encrypted drafts**
 * Support **concurrent rendering of multiple drafts**
 * No CapCut client installation required
 * Cloud-based rendering with low local hardware requirements
@@ -72,81 +72,37 @@ var videoSegment = new VideoSegment(
 );
 videoSegment.AddAnimation(IntroType.斜切);
 videoSegment.AddTransition(TransitionType.信号故障);
-
-var gifSegment = new VideoSegment(
-    gifMaterial,
-    TimeUtil.Trange(videoSegment.End, gifMaterial.Duration)
-);
-gifSegment.AddBackgroundFilling("blur", 0.0625);
 ```
 
-### 4️⃣ Add Text Subtitles
-
-```csharp
-var textSegment = new TextSegment(
-    "It is said that JyDraft works pretty well?",
-    videoSegment.TargetTimerange,
-    font: FontType.文轩体,
-    style: new TextStyle(color: new[] { 1.0f, 1.0f, 0.0f }),
-    clipSettings: new ClipSettings(transformY: -0.8f)
-);
-
-textSegment.AddAnimation(
-    Text_outro.故障闪动,
-    "out",
-    duration: TimeUtil.Tim("1s")
-);
-textSegment.AddBubble("361595", "6742029398926430728");
-```
-
-### 5️⃣ Assemble and Export the Draft
+### 4️⃣ Assemble and Export the Draft
 
 ```csharp
 script
     .AddSegment(audioSegment)
-    .AddSegment(videoSegment)
-    .AddSegment(gifSegment)
-    .AddSegment(textSegment);
+    .AddSegment(videoSegment);
 
 var json = script.Dumps();
 ```
 
 ---
 
-## 2. Draft Rendering & Video Export (HDraft API)
+## 🚀 Draft-to-Video Automated Rendering API
 
-# 🚀 Draft-to-Video Automated Rendering API
+### Authentication (API Key)
 
-## 📌 Overview
-
-A professional **automated video rendering API service** that supports generating videos directly from **JSON draft files** and **media assets**.
-Ideal for batch generation, automation pipelines, and system integration.
-
----
-
-## 🔑 Authentication (API Key)
-
-### 1️⃣ Apply for an API Key
-
-**POST**
+**Apply for API Key**
 
 ```
-https://htwmedia.dpdns.org/auth/applykey?email=user@example.com
+POST https://htwmedia.dpdns.org/auth/applykey?email=user@example.com
 ```
 
-**Required Header**
+Header:
 
 ```
 X-App-Source: HDraft
 ```
 
-> Replace `user@example.com` with your real email address to receive the API Key.
-
----
-
-### 2️⃣ Using the API Key
-
-All subsequent API requests must include the following header:
+All subsequent requests must include:
 
 ```
 X-API-KEY: <your API key>
@@ -154,11 +110,7 @@ X-API-KEY: <your API key>
 
 ---
 
-## 🔐 3. Encrypted Draft Decryption API
-
-Used to decrypt **encrypted CapCut / Jianying draft files** into readable `draft_content.json`.
-
-### Endpoint
+## 🔐 Encrypted Draft Decryption API
 
 **POST**
 
@@ -166,13 +118,7 @@ Used to decrypt **encrypted CapCut / Jianying draft files** into readable `draft
 https://htwmedia.dpdns.org/home/DecryptDraft
 ```
 
-### Parameters
-
-| Name     | Type | Description               |
-| -------- | ---- | ------------------------- |
-| jsonFile | File | Encrypted draft JSON file |
-
-### Response Example
+**Response**
 
 ```json
 {
@@ -184,7 +130,7 @@ https://htwmedia.dpdns.org/home/DecryptDraft
 
 ---
 
-### Python Example (Decrypt Draft)
+## 💻 Python Example (Decrypt Draft)
 
 ```python
 import requests
@@ -193,7 +139,6 @@ BASE_URL = "https://htwmedia.dpdns.org"
 API_KEY = "your_api_key"
 
 headers = {"X-API-KEY": API_KEY}
-
 files = {"jsonFile": open("encrypted_draft.json", "rb")}
 
 res = requests.post(
@@ -210,50 +155,6 @@ if data["success"]:
 
 ---
 
-## 4. Complete Rendering Workflow Example (Python)
-
-```python
-import requests, time
-
-BASE_URL = "https://htwmedia.dpdns.org"
-API_KEY = "your_api_key"
-
-headers = {"X-API-KEY": API_KEY}
-
-files = [
-    ('jsonFile', open('draft.json','rb')),
-    ('assets', open('video.mp4','rb'))
-]
-
-res = requests.post(
-    f"{BASE_URL}/home/UploadDraftPackage",
-    headers=headers,
-    data={'title':'Demo'},
-    files=files
-)
-
-draft_id = res.json()['draftId']
-
-task_id = requests.post(
-    f"{BASE_URL}/home/startrender",
-    params={'draftId': draft_id},
-    headers=headers
-).json()['taskId']
-
-while True:
-    status = requests.get(
-        f"{BASE_URL}/home/getstatus",
-        params={'taskId': task_id},
-        headers=headers
-    ).json()
-    if status['status'] == 'completed':
-        print(status['downloadUrl'])
-        break
-    time.sleep(5)
-```
-
----
-
 ## 📡 API Summary
 
 | Endpoint                 | Method | Description             |
@@ -266,13 +167,21 @@ while True:
 
 ---
 
-## ❗ Common Error Codes
+## 💬 Community & Discussion Group
 
-| Code | Description                |
-| ---- | -------------------------- |
-| 401  | Invalid or missing API Key |
-| 400  | Invalid parameters         |
-| 500  | Internal server error      |
+If you are interested in:
+
+* CapCut / Jianying draft structure analysis
+* Draft encryption & decryption
+* Automated rendering pipelines
+* JyDraft development & extensions
+
+Feel free to join our **discussion group** by scanning the QR code below 👇
+
+![JyDraft Community QR Code](docs/images/community_qr.png)
+
+> The group is mainly used for **technical discussion and experience sharing**.
+> Please keep conversations focused and respectful.
 
 ---
 
@@ -280,5 +189,6 @@ while True:
 
 For learning and technical research purposes only.
 Do **not** use this project in any way that violates CapCut / Jianying terms of service or applicable laws.
+
 
 
