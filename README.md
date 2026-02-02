@@ -157,14 +157,27 @@ X-API-KEY: <你的 API Key>
 
 ### 接口地址
 
-POST
-[https://htwmedia.dpdns.org/home/DecryptDraft](https://htwmedia.dpdns.org/home/DecryptDraft)
+```
+POST https://htwmedia.dpdns.org/home/DecryptDraft
+```
+
+### 请求方式
+
+* `POST`
+* `Content-Type: multipart/form-data`
 
 ### 请求参数
 
-| 参数名      | 类型   | 说明             |
-| -------- | ---- | -------------- |
-| jsonFile | File | 加密后的草稿 JSON 文件 |
+| 参数名      | 类型   | 必填 | 说明                       |
+| -------- | ---- | -- | ------------------------ |
+| jsonFile | File | 是  | 剪映 / CapCut 加密草稿 JSON 文件 |
+
+> ⚠️ 注意：
+>
+> * **必须以文件上传形式提交**
+> * 不是 URL 参数
+> * 不是 base64 字符串
+
 
 ### 返回示例
 
