@@ -112,21 +112,26 @@ X-API-KEY: <your API key>
 
 ## 🔐 Encrypted Draft Decryption API
 
-**POST**
-
 ```
-https://htwmedia.dpdns.org/home/DecryptDraft
+POST https://htwmedia.dpdns.org/home/DecryptDraft
 ```
 
-**Response**
+### Request
 
-```json
-{
-  "success": true,
-  "msg": "decrypt success",
-  "draft_content": "{...}"
-}
-```
+* Method: `POST`
+* Content-Type: `multipart/form-data`
+
+### Parameters
+
+| Name     | Type | Required | Description                                 |
+| -------- | ---- | -------- | ------------------------------------------- |
+| jsonFile | File | Yes      | Encrypted Jianying / CapCut draft JSON file |
+
+> ⚠️ Notes:
+>
+> * The draft must be uploaded as a **file**
+> * URL parameters are **not supported**
+> * Base64 payloads are **not supported**
 
 ---
 
