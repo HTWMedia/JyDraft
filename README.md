@@ -5,7 +5,7 @@
 **JyDraft** 是一个用于 **生成Jianying草稿（Draft）并基于草稿直接渲染导出视频** 的工具集。
 支持通过代码生成草稿文件，并使用独立工具在 **无需安装剪映客户端** 的情况下，将草稿及素材进行云端渲染并导出视频。
 
-👉 可在右侧 **Releases** 页面下载已编译好的导出工具。
+👉 可在 GitHub 右侧 **Releases** 页面下载已编译好的 HDraft 导出工具。
 
 ---
 
@@ -126,32 +126,65 @@ var json = script.Dumps();
 
 ## 🔑 身份验证（API Key）
 
-### 1️⃣ 申请 API Key
+### 1️⃣ 获取 AuthKey
 
-POST
-[https://htwmedia.dpdns.org/auth/applykey?email=user@example.com](https://htwmedia.dpdns.org/auth/applykey?email=user@example.com)
+访问网站，通过 **"获取AuthKey"** 菜单直接获取：
 
-请求头：
+➡️ **https://htwmedia.dpdns.org/Home/GetApiKey**
+
+输入邮箱，点击按钮，AuthKey 将发送到您的邮箱。
+
+> 也可以使用传统接口获取：
+> ```
+> POST https://htwmedia.dpdns.org/auth/applykey?email=你的邮箱
+> 请求头：X-App-Source: HDraft
+> ```
+
+### 2️⃣ 在请求中使用 AuthKey
+
+所有后续 API 请求的 Header 中必须携带：
 
 ```
-X-App-Source: HDraft
+X-API-KEY: <你的 AuthKey>
 ```
 
-> 请将 `email` 替换为你真实的邮箱地址，用于接收 API Key。
+或
+
+```
+AuthKey: <你的 AuthKey>
+```
 
 ---
 
-### 2️⃣ API Key 使用方式
+## 🖥️ 在线体验
 
-所有后续接口请求 **必须在 Header 中携带：**
+无需写代码，直接在浏览器中试用完整流程：
 
-```
-X-API-KEY: <你的 API Key>
-```
+1. 访问 **https://htwmedia.dpdns.org/WebAI/Index** 进入"在线体验"
+2. 登录邮箱账号
+3. 在 **"草稿成片"** 功能中上传草稿 ZIP 包
+4. 等待云端渲染完成，下载视频
+
+适合在对接 API 之前先验证你的草稿包是否正确。
 
 ---
 
-## 🔐 三、加密草稿解密接口
+## 📦 HDraft 命令行工具
+
+**HDraft** 是已编译好的命令行工具，支持批量导出草稿而无需写代码：
+
+1. 从 GitHub 右侧 **[Releases](https://github.com/HTWMedia/JyDraft/releases)** 下载最新版 `HDraft.exe`
+2. 编辑 `config.ini`，配置草稿路径（多个草稿用 `|` 分隔）
+3. 直接运行 `HDraft.exe`
+
+工具特性：
+- 支持并发导出多个草稿
+- 自动解密加密草稿
+- 无需安装剪映客户端
+
+---
+
+## 🔐 加密草稿解密接口
 
 用于将 **剪映 / CapCut 的加密草稿文件** 解密为可读的 `draft_content.json`。
 
@@ -165,6 +198,7 @@ POST https://htwmedia.dpdns.org/home/DecryptDraft
 
 * `POST`
 * `Content-Type: multipart/form-data`
+* 请求头：`X-API-KEY: <你的 AuthKey>`
 
 ### 请求参数
 
@@ -178,7 +212,6 @@ POST https://htwmedia.dpdns.org/home/DecryptDraft
 > * 不是 URL 参数
 > * 不是 base64 字符串
 
-
 ### 返回示例
 
 ```json
@@ -191,13 +224,149 @@ POST https://htwmedia.dpdns.org/home/DecryptDraft
 
 ---
 
+## 📦 完整的渲染流程
+
+### 第一步：打包草稿
+
+将草稿 JSON 及所有素材放入一个 ZIP 包：
+
+```
+my_draft.zip
+├── draft_content.json      # 必须：草稿 JSON
+├── video.mp4               # 草稿引用的视频素材
+├── audio.mp3               # 草稿引用的音频素材
+├── image.png               # 草稿引用的图片素材
+└── ...                     # 其他草稿引用的素材文件
+```
+
+> `draft_content.json` 可以是使用 JyDraft 代码生成的，也可以是从加密草稿解密得到的。素材文件的路径需与 `draft_content.json` 中的引用路径一致。
+
+### 第二步：上传草稿包
+
+```
+POST https://htwmedia.dpdns.org/home/UploadDraftPackage
+Content-Type: multipart/form-data
+X-API-KEY: <你的 AuthKey>
+```
+
+| 参数   | 类型   | 必填 | 说明                        |
+| ------ | ------ | ---- | --------------------------- |
+| file   | File   | 是   | 包含草稿 JSON + 所有素材的 ZIP 包 |
+
+返回示例：
+```json
+{
+  "success": true,
+  "draftId": "{DRAFT_ID}",
+  "files": 5
+}
+```
+
+### 第三步：启动渲染
+
+```
+POST https://htwmedia.dpdns.org/home/StartRender?draftId={DRAFT_ID}
+X-API-KEY: <你的 AuthKey>
+```
+
+返回示例：
+```json
+{
+  "success": true,
+  "taskId": "{TASK_ID}"
+}
+```
+
+### 第四步：查询渲染进度
+
+```
+GET https://htwmedia.dpdns.org/home/GetStatus?taskId={TASK_ID}
+X-API-KEY: <你的 AuthKey>
+```
+
+渲染中：
+```json
+{
+  "Status": "running",
+  "Progress": 45,
+  "DownloadUrl": null
+}
+```
+
+渲染完成：
+```json
+{
+  "Status": "completed",
+  "Progress": 100,
+  "DownloadUrl": "https://..."
+}
+```
+
+---
+
+## 💻 Python 完整流程示例
+
+```python
+import requests
+import time
+
+BASE_URL = "https://htwmedia.dpdns.org"
+API_KEY = "你的AuthKey"
+
+headers = {"X-API-KEY": API_KEY}
+
+# 第一步：上传草稿包（包含 draft_content.json + 所有素材的 ZIP）
+with open("my_draft.zip", "rb") as f:
+    res = requests.post(
+        f"{BASE_URL}/home/UploadDraftPackage",
+        headers=headers,
+        files={"file": f}
+    )
+
+data = res.json()
+draft_id = data["draftId"]
+print(f"草稿上传成功: {draft_id}")
+
+# 第二步：启动渲染
+res = requests.post(
+    f"{BASE_URL}/home/StartRender",
+    headers=headers,
+    params={"draftId": draft_id}
+)
+task_id = res.json()["taskId"]
+print(f"渲染任务已创建: {task_id}")
+
+# 第三步：轮询渲染进度
+while True:
+    res = requests.get(
+        f"{BASE_URL}/home/GetStatus",
+        headers=headers,
+        params={"taskId": task_id}
+    )
+    status = res.json()
+
+    if status["Status"] == "completed":
+        print(f"视频已生成: {status['DownloadUrl']}")
+        # 下载视频
+        video_res = requests.get(status["DownloadUrl"])
+        with open("output.mp4", "wb") as f:
+            f.write(video_res.content)
+        break
+    elif status["Status"] in ("failed", "cancelled"):
+        print("渲染失败")
+        break
+    else:
+        print(f"渲染进度: {status.get('Progress', 0)}%")
+        time.sleep(5)
+```
+
 ### Python 示例（解密草稿）
 
 ```python
 import requests
 
 BASE_URL = "https://htwmedia.dpdns.org"
-API_KEY = "your_api_key"
+API_KEY = "你的AuthKey"
 
 headers = {"X-API-KEY": API_KEY}
 
@@ -217,59 +386,16 @@ if data["success"]:
 
 ---
 
-## 四、完整渲染流程示例（Python）
-
-```python
-import requests, time
-
-BASE_URL = "https://htwmedia.dpdns.org"
-API_KEY = "your_api_key"
-
-headers = {"X-API-KEY": API_KEY}
-
-files = [
-    ('jsonFile', open('draft.json','rb')),
-    ('assets', open('video.mp4','rb'))
-]
-
-res = requests.post(
-    f"{BASE_URL}/home/UploadDraftPackage",
-    headers=headers,
-    data={'title':'示例'},
-    files=files
-)
-
-draft_id = res.json()['draftId']
-
-task_id = requests.post(
-    f"{BASE_URL}/home/startrender",
-    params={'draftId': draft_id},
-    headers=headers
-).json()['taskId']
-
-while True:
-    status = requests.get(
-        f"{BASE_URL}/home/getstatus",
-        params={'taskId': task_id},
-        headers=headers
-    ).json()
-    if status['status'] == 'completed':
-        print("下载地址：", status['downloadUrl'])
-        break
-    time.sleep(5)
-```
-
----
-
 ## 📡 接口总览
 
 | 接口                       | 方法   | 说明         |
 | ------------------------ | ---- | ---------- |
-| /auth/applykey           | POST | 申请 API Key |
+| /auth/applykey           | POST | 申请 API Key（邮件发送） |
+| /Home/GetApiKey          | GET  | 网站获取 AuthKey（推荐） |
+| /home/UploadDraftPackage | POST | 上传草稿 ZIP 包    |
+| /home/StartRender        | POST | 启动渲染       |
+| /home/GetStatus          | GET  | 查询渲染进度     |
 | /home/DecryptDraft       | POST | 解密加密草稿     |
-| /home/UploadDraftPackage | POST | 上传草稿与素材    |
-| /home/startrender        | POST | 启动渲染       |
-| /home/getstatus          | GET  | 查询渲染进度     |
 
 ---
 
@@ -295,7 +421,8 @@ while True:
 
 | 错误码 | 说明            |
 | --- | ------------- |
-| 401 | API Key 无效或缺失 |
+| 401 | AuthKey 无效或缺失 |
+| 402 | AuthKey 已到期    |
 | 400 | 参数错误          |
 | 500 | 服务器内部错误       |
 
@@ -304,5 +431,3 @@ while True:
 ## 📄 License
 
 仅用于学习与技术研究，请勿用于任何违反剪映 / CapCut 用户协议或相关法律法规的用途。
-
-
