@@ -410,7 +410,7 @@ if data["success"]:
 
 欢迎扫码加入 **技术讨论群** 👇
 
-![JyDraft 技术讨论群二维码](community_qr.png)
+![JyDraft 技术讨论群二维码](qrcode_1785752822479.jpg)
 
 > 本群仅用于 **技术交流与经验分享**，
 > 请勿发布广告或无关内容。
