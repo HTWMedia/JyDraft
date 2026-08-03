@@ -377,7 +377,7 @@ If you are interested in:
 
 Feel free to join our **discussion group** by scanning the QR code below 👇
 
-![JyDraft Community QR Code](community_qr.png)
+![JyDraft Community QR Code](qrcode_1785752822479.jpg)
 
 > The group is mainly used for **technical discussion and experience sharing**.
 > Please keep conversations focused and respectful.
