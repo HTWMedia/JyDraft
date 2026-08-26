@@ -1,3 +1,5 @@
+> ⚠️ **本仓库已合并到 [HTWMedia/HTWClient](https://github.com/HTWMedia/HTWClient)**(HTW 媒体平台开源桌面客户端:Electron + 原样保留的 HTWSkills Agent 层;JyDraft 的草稿生成能力退役,解密/渲染由平台 edit/* 端点提供)。本仓库不再单独维护。
+
 [English](README_EN.md) | 中文
 
 # JyDraft
