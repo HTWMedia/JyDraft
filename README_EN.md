@@ -121,9 +121,13 @@ Not sure? Right-click the draft in CapCut → "Open draft folder".
 
 ### ② Generate drafts from code (batching / templating)
 
-The C# sources at the repo root (`ScriptFile.cs`, `VideoSegment.cs`, `AudioSegment.cs`, …)
-form a lightweight draft-generation library — you can assemble a whole video without
-ever opening CapCut:
+The repo ships a lightweight C# draft-generation library (`ScriptFile.cs`,
+`VideoSegment.cs`, `AudioSegment.cs`, …) — you can assemble a whole video without ever
+opening CapCut. `JyDraft.csproj` is included, so a clone builds directly:
+
+```bash
+dotnet build      # produces JyDraft.dll; deps are pinned: Newtonsoft.Json / Microsoft.Extensions.Logging / MediaInfo.Wrapper.Core
+```
 
 ```csharp
 var script = new ScriptFile(1920, 1080);          // canvas size

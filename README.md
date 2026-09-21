@@ -114,8 +114,13 @@ C:\Users\<你>\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\<
 
 ### ② 用代码生成草稿（批量 / 模板化）
 
-本仓库根目录的 C# 源码（`ScriptFile.cs`、`VideoSegment.cs`、`AudioSegment.cs` …）
-是一个轻量的草稿生成库，可以不打开剪映、直接用代码拼出一条片子：
+本仓库自带一个轻量的 C# 草稿生成库（`ScriptFile.cs`、`VideoSegment.cs`、`AudioSegment.cs` …），
+可以不打开剪映、直接用代码拼出一条片子。
+仓库已包含 `JyDraft.csproj`，clone 后直接编译：
+
+```bash
+dotnet build      # 产出 JyDraft.dll，依赖已配好：Newtonsoft.Json / Microsoft.Extensions.Logging / MediaInfo.Wrapper.Core
+```
 
 ```csharp
 var script = new ScriptFile(1920, 1080);          // 画布尺寸
