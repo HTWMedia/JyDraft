@@ -1,8 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JyDraft
 {
@@ -52,21 +50,31 @@ namespace JyDraft
         }
     }
 
-    public abstract class BaseTrack
+    public abstract class BaseTrack : IDraftExportable
     {
         public TrackTypeName TrackTypeName { get; protected set; }
-        public string Name { get; set; }
-        public string TrackId { get; protected set; }
-        public int RenderIndex { get; set; }
+        public string Name { get; internal set; }
+        public string TrackId { get; internal set; }
+        public int RenderIndex { get; internal set; }
 
-        public virtual Type AcceptSegmentType { get; }
+        /// <summary>本轨道接受的片段类型；adjust 这类无片段轨道为 null</summary>
+        public virtual Type AcceptSegmentType => null;
+
+        /// <summary>
+        /// 以基类视角添加一个片段，具体实现负责类型校验与重叠校验。
+        /// 有了它，ScriptFile 不再需要反射调用泛型方法。
+        /// </summary>
+        public abstract void AddSegment(BaseSegment segment);
+
         public abstract Dictionary<string, object> ExportJson();
     }
 
     public class Track<T> : BaseTrack where T : BaseSegment
     {
-        public bool Mute { get; set; }
-        public List<T> Segments { get; set; }
+        private readonly List<T> _segments = new List<T>();
+
+        public bool Mute { get; }
+        public IReadOnlyList<T> Segments => _segments;
 
         public Track(TrackTypeName trackType, string name, int renderIndex, bool mute)
         {
@@ -75,45 +83,71 @@ namespace JyDraft
             TrackId = Guid.NewGuid().ToString();
             RenderIndex = renderIndex;
             Mute = mute;
-            Segments = new List<T>();
         }
 
-        public long EndTime => Segments.Count == 0 ? 0 : Segments[^1].TargetTimerange.End;
+        public long EndTime => _segments.Count == 0 ? 0 : _segments[^1].End;
 
         public override Type AcceptSegmentType => TrackType.Meta[TrackTypeName].SegmentType;
+
+        public override void AddSegment(BaseSegment segment)
+        {
+            if (segment is not T typed)
+                throw new InvalidCastException($"Segment type {segment.GetType()} does not match expected {AcceptSegmentType}");
+            AddSegment(typed);
+        }
 
         public Track<T> AddSegment(T segment)
         {
             if (!AcceptSegmentType.IsInstanceOfType(segment))
                 throw new InvalidCastException($"Segment type {segment.GetType()} does not match expected {AcceptSegmentType}");
 
-            foreach (var seg in Segments)
+            foreach (var seg in _segments)
             {
                 if (seg.Overlaps(segment))
                     throw new Exception($"New segment overlaps with existing segment [start: {segment.TargetTimerange.Start}, end: {segment.TargetTimerange.End}]");
             }
 
-            Segments.Add(segment);
+            _segments.Add(segment);
             return this;
         }
 
         public override Dictionary<string, object> ExportJson()
         {
-            var segmentExports = Segments.Select(seg => seg.ExportJson()).ToList();
-
+            var segmentExports = _segments.Select(seg => seg.ExportJson()).ToList();
             foreach (var seg in segmentExports)
                 seg["render_index"] = RenderIndex;
 
             return new Dictionary<string, object>
+            {
+                { "attribute", Mute ? 1 : 0 },
+                { "flag", 0 },
+                { "id", TrackId },
+                { "is_default_name", string.IsNullOrEmpty(Name) },
+                { "name", Name },
+                { "segments", segmentExports },
+                { "type", TrackTypeName.ToString() }
+            };
+        }
+    }
+
+    /// <summary>
+    /// 轨道工厂。原先靠 <c>Activator.CreateInstance(typeof(Track&lt;&gt;).MakeGenericType(...))</c>
+    /// 反射拼装，编译期无法校验，adjust 轨道还会因为片段类型为 null 直接炸在反射里。
+    /// </summary>
+    internal static class TrackFactory
+    {
+        public static BaseTrack Create(TrackTypeName trackType, string name, int renderIndex, bool mute)
         {
-            { "attribute", Mute ? 1 : 0 },
-            { "flag", 0 },
-            { "id", TrackId },
-            { "is_default_name", string.IsNullOrEmpty(Name) },
-            { "name", Name },
-            { "segments", segmentExports },
-            { "type", TrackTypeName.ToString() }
-        };
+            return trackType switch
+            {
+                TrackTypeName.video => new Track<VideoSegment>(trackType, name, renderIndex, mute),
+                TrackTypeName.audio => new Track<AudioSegment>(trackType, name, renderIndex, mute),
+                TrackTypeName.effect => new Track<EffectSegment>(trackType, name, renderIndex, mute),
+                TrackTypeName.filter => new Track<FilterSegment>(trackType, name, renderIndex, mute),
+                TrackTypeName.sticker => new Track<StickerSegment>(trackType, name, renderIndex, mute),
+                TrackTypeName.text => new Track<TextSegment>(trackType, name, renderIndex, mute),
+                _ => throw new ArgumentException($"轨道类型 '{trackType}' 没有对应的片段类型，无法创建轨道")
+            };
         }
     }
 }

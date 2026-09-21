@@ -8,8 +8,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- MediaInfo 需要 ILogger：库内统一用 NullLogger，不再每个素材 new 一个 Console LoggerFactory -->
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
     <PackageReference Include="MediaInfo.Wrapper.Core" Version="21.9.3" />
   </ItemGroup>
 </Project>

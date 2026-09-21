@@ -9,7 +9,7 @@ using static  JyDraft.TimeUtil;
 
 namespace JyDraft
 {
-    public class AudioFade
+    public class AudioFade : IDraftExportable
     {
         public string FadeId { get; }
         public int InDuration { get; }
@@ -35,7 +35,7 @@ namespace JyDraft
         }
     }
 
-    public class AudioEffect
+    public class AudioEffect : IDraftExportable
     {
         public string Name { get; }
         public string EffectId { get; }
@@ -105,47 +105,36 @@ namespace JyDraft
     {
         public AudioMaterial MaterialInstance { get; }
         public AudioFade Fade { get; private set; }
-        public List<AudioEffect> Effects { get; }
+
+        private readonly List<AudioEffect> _effects;
+        public IReadOnlyList<AudioEffect> Effects => _effects;
         // public List<string> ExtraMaterialRefs { get; } // 你可以在基类实现
 
-        public AudioSegment(AudioMaterial material, Timerange targetTimerange, Timerange sourceTimerange = null, float? speed = null, float volume = 1.0f)
-            : base(material.MaterialId, null, null, 1.0f, volume)
+        public AudioSegment(AudioMaterial material, Timerange targetTimerange, Timerange sourceTimerange = null,
+                            float? speed = null, float volume = 1.0f)
+            : this(material, MediaTiming.Resolve(sourceTimerange, targetTimerange, speed.HasValue ? (double?)speed.Value : null), volume)
         {
-            // 速度、时间区间的推导逻辑
-            if (sourceTimerange != null && speed.HasValue)
-            {
-                targetTimerange = new Timerange(targetTimerange.Start, (int)Math.Round(sourceTimerange.Duration / speed.Value));
-            }
-            else if (sourceTimerange != null)
-            {
-                speed = sourceTimerange.Duration / (float)targetTimerange.Duration;
-            }
-            else
-            {
-                speed = speed ?? 1.0f;
-                sourceTimerange = new Timerange(0, (int)Math.Round(targetTimerange.Duration * speed.Value));
-            }
+        }
 
-            if (sourceTimerange.End > material.Duration)
-                throw new ArgumentException($"截取的素材时间范围 {sourceTimerange} 超出了素材时长({material.Duration})");
+        /// <summary>时间/速度推导完成后再交给基类，不再「先传 null 再回填」</summary>
+        private AudioSegment(AudioMaterial material, MediaTiming timing, float volume)
+            : base(material.MaterialId, timing.Source, timing.Target, timing.Speed, volume)
+        {
+            if (timing.Source.End > material.Duration)
+                throw new ArgumentException($"截取的素材时间范围 {timing.Source} 超出了素材时长({material.Duration})");
 
-            // 初始化父类
-            base.SourceTimerange = sourceTimerange;
-            base.TargetTimerange = targetTimerange;
-            base.Speed.Value = speed.Value;
-
-            MaterialInstance = material; // 假设实现了 Clone
-            Effects = new List<AudioEffect>();
+            MaterialInstance = material;
+            _effects = new List<AudioEffect>();
         }
 
         public AudioSegment AddEffect(EffectMeta effectType, List<float?> parameters = null)
         {
             // effectType 类型需根据实际情况实现
             var effectInst = new AudioEffect(effectType, parameters);
-            if (Effects.Any(e => e.CategoryId == effectInst.CategoryId))
+            if (_effects.Any(e => e.CategoryId == effectInst.CategoryId))
                 throw new ArgumentException($"当前音频片段已经有此类型 ({effectInst.CategoryName}) 的音效了");
-            Effects.Add(effectInst);
-            ExtraMaterialRefs.Add(effectInst.EffectId);
+            _effects.Add(effectInst);
+            AddExtraMaterialRef(effectInst.EffectId);
             return this;
         }
 
@@ -162,23 +151,27 @@ namespace JyDraft
             }
 
             Fade = new AudioFade(ParseDuration(inDuration), ParseDuration(outDuration));
-            ExtraMaterialRefs.Add(Fade.FadeId);
+            AddExtraMaterialRef(Fade.FadeId);
             return this;
         }
 
         public AudioSegment AddKeyframe(int timeOffset, float volume)
         {
-            var property = KeyframeProperty.Volume;
-            var kfList = CommonKeyframes.FirstOrDefault(k => k.Property == property);
-            if (kfList != null)
-            {
-                kfList.AddKeyframe(timeOffset, volume);
-                return this;
-            }
-            kfList = new KeyframeList(property);
-            kfList.AddKeyframe(timeOffset, volume);
-            CommonKeyframes.Add(kfList);
+            AddKeyframeInternal(KeyframeProperty.Volume, timeOffset, volume);
             return this;
+        }
+
+        internal override void CollectMaterials(ScriptMaterial materials)
+        {
+            if (Fade != null && !materials.AudioFades.Contains(Fade))
+                materials.AudioFades.Add(Fade);
+
+            foreach (var effect in _effects)
+                if (!materials.AudioEffects.Contains(effect))
+                    materials.AudioEffects.Add(effect);
+
+            materials.Speeds.Add(Speed);
+            materials.AddMaterial(MaterialInstance);
         }
 
         public override Dictionary<string, object> ExportJson()

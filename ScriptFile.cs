@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
 using JyDraft.meta;
 using System;
 using System.Collections.Generic;
@@ -25,10 +26,11 @@ namespace JyDraft
         public List<SegmentAnimations> Animations { get; set; }
         public List<VideoEffect> VideoEffects { get; set; }
 
-        public List<Speed> Speeds { get; set; }
+        public List<SpeedMaterial> Speeds { get; }
         public List<Dictionary<string, object>> Masks { get; set; }
         public List<Transition> Transitions { get; set; }
-        public List<object> Filters { get; set; } // Could be Filter or TextBubble
+        /// <summary>滤镜 / 文本气泡这类共用 effects 桶的素材（原先是 List&lt;object&gt;，全靠 as 强转）</summary>
+        public List<IDraftExportable> Filters { get; }
         public List<BackgroundFilling> Canvases { get; set; }
 
         public ScriptMaterial()
@@ -43,11 +45,29 @@ namespace JyDraft
             Animations = new List<SegmentAnimations>();
             VideoEffects = new List<VideoEffect>();
 
-            Speeds = new List<Speed>();
+            Speeds = new List<SpeedMaterial>();
             Masks = new List<Dictionary<string, object>>();
             Transitions = new List<Transition>();
-            Filters = new List<object>();
+            Filters = new List<IDraftExportable>();
             Canvases = new List<BackgroundFilling>();
+        }
+
+        /// <summary>登记音视频素材，按 MaterialId 去重</summary>
+        internal void AddMaterial(object material)
+        {
+            switch (material)
+            {
+                case VideoMaterial video:
+                    if (!Videos.Any(v => v.MaterialId == video.MaterialId))
+                        Videos.Add(video);
+                    break;
+                case AudioMaterial audio:
+                    if (!Audios.Any(a => a.MaterialId == audio.MaterialId))
+                        Audios.Add(audio);
+                    break;
+                default:
+                    throw new ArgumentException($"错误的素材类型: '{material.GetType()}'");
+            }
         }
 
         public bool Contains(object item)
@@ -91,8 +111,7 @@ namespace JyDraft
                 ["color_curves"] = new List<object>(),
                 ["digital_humans"] = new List<object>(),
                 ["drafts"] = new List<object>(),
-                ["effects"] = Filters.Select(f =>
-                    (f as Filter)?.ExportJson() ?? (f as TextBubble)?.ExportJson()).ToList(),
+                ["effects"] = Filters.Select(f => f.ExportJson()).ToList(),
                 ["flowers"] = new List<object>(),
                 ["green_screens"] = new List<object>(),
                 ["handwrites"] = new List<object>(),
@@ -132,19 +151,21 @@ namespace JyDraft
 
     public class ScriptFile
     {
-        public string? SavePath { get; set; }
-        public JObject Content { get; set; }
+        public string? SavePath { get; internal set; }
 
-        public int Width { get; set; }
-        public int Height { get; set; }
-        public int Fps { get; set; }
-        public long Duration { get; set; }
+        /// <summary>草稿原始 JSON。JObject 本身可变（如 Content["id"]），但引用不再对外可换</summary>
+        public JObject Content { get; private set; }
 
-        public ScriptMaterial Materials { get; set; }
-        public Dictionary<string, BaseTrack> Tracks { get; set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int Fps { get; private set; }
+        public long Duration { get; private set; }
 
-        public Dictionary<string, List<Dictionary<string, object>>> ImportedMaterials { get; set; }
-        public List<ImportedTrack> ImportedTracks { get; set; }
+        public ScriptMaterial Materials { get; private set; }
+        public Dictionary<string, BaseTrack> Tracks { get; private set; }
+
+        public Dictionary<string, List<Dictionary<string, object>>> ImportedMaterials { get; private set; }
+        public List<ImportedTrack> ImportedTracks { get; private set; }
 
         private const string TEMPLATE_FILE = "draft_content_template.json";
 
@@ -183,7 +204,7 @@ namespace JyDraft
                 Content = json,
                 ImportedMaterials = json["materials"]?.ToObject<Dictionary<string, List<Dictionary<string, object>>>>() ?? new(),
                 ImportedTracks = json["tracks"]?
-            .Select(track => new ImportedTrack(track.ToObject<Dictionary<string, object>>()))
+            .Select(track => TrackImporter.ImportTrack(track.ToObject<Dictionary<string, object>>()))
             .ToList() ?? new()
             };
 
@@ -192,21 +213,7 @@ namespace JyDraft
 
         public ScriptFile AddMaterial(object material)
         {
-            if (material is VideoMaterial video)
-            {
-                if (!Materials.Videos.Any(v => v.MaterialId == video.MaterialId))
-                    Materials.Videos.Add(video);
-            }
-            else if (material is AudioMaterial audio)
-            {
-                if (!Materials.Audios.Any(a => a.MaterialId == audio.MaterialId))
-                    Materials.Audios.Add(audio);
-            }
-            else
-            {
-                throw new ArgumentException($"错误的素材类型: '{material.GetType()}'");
-            }
-
+            Materials.AddMaterial(material);
             return this;
         }
 
@@ -223,15 +230,11 @@ namespace JyDraft
             if (Tracks.ContainsKey(trackName))
                 throw new Exception($"名为 '{trackName}' 的轨道已存在");
 
-            int renderIndex = TrackType.Meta[TrackType.FromName(trackName)].RenderIndex + relativeIndex;
+            int renderIndex = TrackType.Meta[trackTypeName].RenderIndex + relativeIndex;
             if (absoluteIndex.HasValue)
                 renderIndex = absoluteIndex.Value;
 
-            // 通过 trackType 获取泛型参数 T（片段类型）
-            var segmentType = TrackType.Meta[TrackType.FromName(trackName)].SegmentType;
-            var genericType = typeof(Track<>).MakeGenericType(segmentType);
-            var track = (BaseTrack)Activator.CreateInstance(genericType, trackTypeName, trackName, renderIndex, mute)!;
-
+            var track = TrackFactory.Create(trackTypeName, trackName, renderIndex, mute);
             Tracks[trackName] = track;
             return this;
         }
@@ -255,80 +258,17 @@ namespace JyDraft
             return matchingTracks[0];
         }
 
+        /// <summary>
+        /// 加入一个片段：轨道校验交给轨道自己，素材登记交给片段自己（多态），
+        /// 原先这里是一个按片段类型 switch 的大方法 + 反射调用泛型 AddSegment。
+        /// </summary>
         public ScriptFile AddSegment(BaseSegment segment, string? trackName = null)
         {
-            var segmentType = segment.GetType();
-            var track = GetTrack(segmentType, trackName);
-
-            // 通过反射调用泛型 AddSegment 方法
-            var method = typeof(Track<>)
-                .MakeGenericType(segmentType)
-                .GetMethod("AddSegment")!;
-
-            method.Invoke(track, new object[] { segment });
+            var track = GetTrack(segment.GetType(), trackName);
+            track.AddSegment(segment);
+            segment.CollectMaterials(Materials);
 
             Duration = Math.Max(Duration, segment.End);
-
-            switch (segment)
-            {
-                case VideoSegment videoSeg:
-                    if (videoSeg.AnimationsInstance != null && !Materials.Animations.Contains(videoSeg.AnimationsInstance))
-                        Materials.Animations.Add(videoSeg.AnimationsInstance);
-
-                    foreach (var effect in videoSeg.Effects)
-                        if (!Materials.VideoEffects.Contains(effect))
-                            Materials.VideoEffects.Add(effect);
-
-                    foreach (var filter in videoSeg.Filters)
-                        if (!Materials.Filters.Contains(filter))
-                            Materials.Filters.Add(filter);
-
-                    if (videoSeg.Mask != null)
-                        Materials.Masks.Add(videoSeg.Mask.ExportJson());
-
-                    if (videoSeg.Transition != null && !Materials.Transitions.Contains(videoSeg.Transition))
-                        Materials.Transitions.Add(videoSeg.Transition);
-
-                    if (videoSeg.BackgroundFilling != null)
-                        Materials.Canvases.Add(videoSeg.BackgroundFilling);
-
-                    Materials.Speeds.Add(videoSeg.Speed);
-                    AddMaterial(videoSeg.MaterialInstance);
-                    break;
-
-                case StickerSegment stickerSeg:
-                    Materials.Stickers.Add(stickerSeg.ExportMaterial());
-                    break;
-
-                case AudioSegment audioSeg:
-                    if (audioSeg.Fade != null && !Materials.AudioFades.Contains(audioSeg.Fade))
-                        Materials.AudioFades.Add(audioSeg.Fade);
-
-                    foreach (var effect in audioSeg.Effects)
-                        if (!Materials.AudioEffects.Contains(effect))
-                            Materials.AudioEffects.Add(effect);
-
-                    Materials.Speeds.Add(audioSeg.Speed);
-                    AddMaterial(audioSeg.MaterialInstance);
-                    break;
-
-                case TextSegment textSeg:
-                    if (textSeg.AnimationsInstance != null && !Materials.Animations.Contains(textSeg.AnimationsInstance))
-                        Materials.Animations.Add(textSeg.AnimationsInstance);
-
-                    if (textSeg.Bubble != null)
-                        Materials.Filters.Add(textSeg.Bubble);
-
-                    if (textSeg.Effect != null)
-                        Materials.Filters.Add(textSeg.Effect);
-
-                    Materials.Texts.Add(textSeg.ExportMaterial());
-                    break;
-
-                default:
-                    throw new InvalidOperationException($"Unsupported segment type: {segmentType.Name}");
-            }
-
             return this;
         }
 
@@ -517,7 +457,7 @@ namespace JyDraft
             long offsetUs = TimeUtil.Tim(offset ?? 0);
             if (offsetUs != 0)
             {
-                foreach (var seg in importedTrack.Segments)
+                foreach (var seg in importedTrack.AllSegments)
                 {
                     seg.TargetTimerange.Start = Math.Max(0, seg.TargetTimerange.Start + offsetUs);
                 }
@@ -527,7 +467,7 @@ namespace JyDraft
 
             // 收集需要复制的素材ID
             var materialIds = new HashSet<string>();
-            if (track.RawData.TryGetValue("segments", out var segsObj) && segsObj is List<Dictionary<string, object>> segments)
+            var segments = ImportedTrack.ReadSegments(track.RawData);
             {
                 foreach (var segment in segments)
                 {
@@ -878,7 +818,17 @@ namespace JyDraft
             { "height", Height },
             { "ratio", "original" }
         });
-            Content["materials"] = JObject.FromObject(Materials.ExportJson());
+            // 合并导入的素材：导入轨道引用的素材存在 ImportedMaterials 里，
+            // 原先这段合并逻辑被注释掉了，导致导入的轨道引用不到任何素材
+            var materialsJson = JObject.FromObject(Materials.ExportJson());
+            foreach (var kvp in ImportedMaterials)
+            {
+                var bucket = materialsJson[kvp.Key] as JArray ?? new JArray();
+                foreach (var material in kvp.Value)
+                    bucket.Add(JObject.FromObject(material));
+                materialsJson[kvp.Key] = bucket;
+            }
+            Content["materials"] = materialsJson;
 
             //// 合并导入的素材
             //var materialsDict = Materials.ExportJson() as Dictionary<string, object>;

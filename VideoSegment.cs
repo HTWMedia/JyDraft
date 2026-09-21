@@ -9,7 +9,7 @@ using static JyDraft.TimeUtil;
 
 namespace JyDraft
 {
-    public class Mask
+    public class Mask : IDraftExportable
     {
         public MaskMeta MaskMeta { get; set; }
         public string GlobalId { get; set; }
@@ -67,12 +67,12 @@ namespace JyDraft
         }
     }
 
-    public class VideoEffect
+    public class VideoEffect : IDraftExportable
     {
         public string Name { get; set; }
         public string GlobalId { get; set; }
         public string EffectId { get; set; }
-        public string ResourceId { get; set; }
+        public string ResourceId { get; }
         public string EffectType { get; set; } // "video_effect" or "face_effect"
         public int ApplyTargetType { get; set; } // 0 or 2
         public List<EffectParamInstance> AdjustParams { get; set; }
@@ -87,29 +87,19 @@ namespace JyDraft
             GlobalId = Guid.NewGuid().ToString();
             AdjustParams = new List<EffectParamInstance>();
 
+            // 场景特效与人像特效只在 type 上不同，其余字段完全一致
             var category = VideoEffectCategoryResolver.GetCategory(effectMeta);
-            if (category== VideoEffectCategory.Scene)
+            EffectType = category switch
             {
-                EffectType = "video_effect";
-                Name = effectMeta.Name;
-                EffectId = effectMeta.EffectId;
-                ResourceId = effectMeta.ResourceId;
-                AdjustParams = effectMeta.ParseParams(parameters);
-            }
-            else if (category==VideoEffectCategory.Character)
-            {
-                EffectType = "face_effect";
-                Name = effectMeta.Name;
-                EffectId = effectMeta.EffectId;
-                ResourceId = effectMeta.ResourceId;
-                AdjustParams = effectMeta.ParseParams(parameters);
-            }
-            else
-            {
-                throw new ArgumentException("Invalid effect meta type");
-            }
+                VideoEffectCategory.Scene => "video_effect",
+                VideoEffectCategory.Character => "face_effect",
+                _ => throw new ArgumentException("Invalid effect meta type")
+            };
+            Name = effectMeta.Name;
+            EffectId = effectMeta.EffectId;
+            ResourceId = effectMeta.ResourceId;
+            AdjustParams = effectMeta.ParseParams(parameters);
             ApplyTargetType = applyTargetType;
-            
         }
 
         public Dictionary<string, object> ExportJson()
@@ -146,7 +136,7 @@ namespace JyDraft
         }
     }
 
-    public class Filter
+    public class Filter : IDraftExportable
     {
         /// <summary>滤镜全局 ID</summary>
         public string GlobalId { get; private set; }
@@ -206,7 +196,7 @@ namespace JyDraft
         }
     }
 
-    public class Transition
+    public class Transition : IDraftExportable
     {
         /// <summary>转场名称</summary>
         public string Name { get; set; }
@@ -218,7 +208,7 @@ namespace JyDraft
         public string EffectId { get; set; }
 
         /// <summary>资源id，由剪映本身提供</summary>
-        public string ResourceId { get; set; }
+        public string ResourceId { get; }
 
         /// <summary>转场持续时间，单位为微秒</summary>
         public int Duration { get; set; }
@@ -255,7 +245,7 @@ namespace JyDraft
         }
     }
 
-    public class BackgroundFilling
+    public class BackgroundFilling : IDraftExportable
     {
         /// <summary>
         /// 背景填充全局ID，由程序自动生成
@@ -312,72 +302,45 @@ namespace JyDraft
 
     public class VideoSegment : VisualSegment
     {
-        public VideoMaterial MaterialInstance { get; set; }
-        public (int Width, int Height) MaterialSize { get; set; }
-        public List<VideoEffect> Effects { get; set; } = new List<VideoEffect>();
-        public List<Filter> Filters { get; set; } = new List<Filter>();
-        public Mask Mask { get; set; }
-        public Transition Transition { get; set; }
-        public BackgroundFilling BackgroundFilling { get; set; }
+        public VideoMaterial MaterialInstance { get; }
+        public (int Width, int Height) MaterialSize { get; }
 
-        public VideoSegment(
-            VideoMaterial material,
-            Timerange targetTimerange,
-            Timerange sourceTimerange = null,
-            double? speed = null,
-            double volume = 1.0,
-            ClipSettings clipSettings = null)
-            : base(material.MaterialId, sourceTimerange, targetTimerange, speed ?? 1.0, volume, clipSettings)
+        private readonly List<VideoEffect> _effects = new List<VideoEffect>();
+        private readonly List<Filter> _filters = new List<Filter>();
+
+        public IReadOnlyList<VideoEffect> Effects => _effects;
+        public IReadOnlyList<Filter> Filters => _filters;
+        public Mask Mask { get; private set; }
+        public Transition Transition { get; private set; }
+        public BackgroundFilling BackgroundFilling { get; private set; }
+
+        public VideoSegment(VideoMaterial material, Timerange targetTimerange, Timerange sourceTimerange = null,
+                            double? speed = null, double volume = 1.0, ClipSettings clipSettings = null)
+            : this(material, MediaTiming.Resolve(sourceTimerange, targetTimerange, speed), volume, clipSettings)
         {
-            if (sourceTimerange != null && speed.HasValue)
-            {
-                targetTimerange = new Timerange(targetTimerange.Start, (int)(sourceTimerange.Duration / speed.Value));
-            }
-            else if (sourceTimerange != null && !speed.HasValue)
-            {
-                speed = sourceTimerange.Duration / targetTimerange.Duration;
-            }
-            else
-            {
-                speed ??= 1.0;
-                sourceTimerange = new Timerange(0, (int)(targetTimerange.Duration * speed.Value));
-            }
-
-            if (sourceTimerange.End > material.Duration)
-                throw new ArgumentOutOfRangeException("sourceTimerange 超出了素材时长");
-
-            // 初始化父类
-            base.SourceTimerange = sourceTimerange;
-            base.TargetTimerange = targetTimerange;
-            base.Speed.Value = speed.Value;
-
-            this.MaterialInstance = material;
-            this.MaterialSize = (material.Width, material.Height);
         }
 
-        public VideoSegment AddAnimation(
-    AnimationMeta animationMeta, // 可以是 IntroType, OutroType, 或 GroupAnimationType
-    object duration = null // 可以是 int 或 string 或 null
-)
+        /// <summary>时间点已推导完毕后才交给基类，避免「先按占位值构造、再回头改基类字段」</summary>
+        private VideoSegment(VideoMaterial material, MediaTiming timing, double volume, ClipSettings clipSettings)
+            : base(material.MaterialId, timing.Source, timing.Target, timing.Speed, volume, clipSettings)
+        {
+            if (timing.Source.End > material.Duration)
+                throw new ArgumentOutOfRangeException("sourceTimerange 超出了素材时长");
+
+            MaterialInstance = material;
+            MaterialSize = (material.Width, material.Height);
+        }
+
+        public VideoSegment AddAnimation(AnimationMeta animationMeta, object duration = null)
         {
             long? resolvedDuration = null;
             long start = 0;
 
-            // 假设有类似 tim() 的解析方法
             if (duration != null)
             {
-                if (duration is string strDuration)
-                {
-                    resolvedDuration = Tim(strDuration);
-                }
-                else if (duration is int intDuration)
-                {
-                    resolvedDuration = intDuration;
-                }
-                else
-                {
-                    throw new ArgumentException("duration must be int or string");
-                }
+                if (duration is string strDuration) resolvedDuration = Tim(strDuration);
+                else if (duration is int intDuration) resolvedDuration = intDuration;
+                else throw new ArgumentException("duration must be int or string");
             }
 
             var category = AnimationCategoryResolver.GetCategory(animationMeta);
@@ -392,13 +355,13 @@ namespace JyDraft
 
                 case AnimationCategory.Outro:
                     resolvedDuration ??= animationMeta.Duration;
-                    start = this.TargetTimerange.Duration - resolvedDuration.Value;
+                    start = TargetTimerange.Duration - resolvedDuration.Value;
                     categoryName = "out";
                     break;
 
                 case AnimationCategory.Group:
                     start = 0;
-                    resolvedDuration ??= this.TargetTimerange.Duration;
+                    resolvedDuration ??= TargetTimerange.Duration;
                     categoryName = "group";
                     break;
 
@@ -406,32 +369,23 @@ namespace JyDraft
                     throw new InvalidOperationException("无法识别动画类型。");
             }
 
-            if (this.AnimationsInstance == null)
-            {
-                this.AnimationsInstance = new SegmentAnimations();
-                this.ExtraMaterialRefs.Add(this.AnimationsInstance.AnimationId);
-            }
-
-            this.AnimationsInstance.AddAnimation(
-                new VideoAnimation(animationMeta,categoryName, start, resolvedDuration.Value)
-            );
-
+            EnsureAnimations().AddAnimation(new VideoAnimation(animationMeta, categoryName, start, resolvedDuration.Value));
             return this;
         }
 
         public VideoSegment AddEffect(EffectMeta effectType, List<float?> parameters = null)
         {
             var effect = new VideoEffect(effectType, parameters);
-            Effects.Add(effect);
-            ExtraMaterialRefs.Add(effect.GlobalId);
+            _effects.Add(effect);
+            AddExtraMaterialRef(effect.GlobalId);
             return this;
         }
 
         public VideoSegment AddFilter(EffectMeta meta, float intensity = 100.0f)
         {
             var filter = new Filter(meta, intensity / 100.0f);
-            Filters.Add(filter);
-            ExtraMaterialRefs.Add(filter.GlobalId);
+            _filters.Add(filter);
+            AddExtraMaterialRef(filter.GlobalId);
             return this;
         }
 
@@ -453,8 +407,8 @@ namespace JyDraft
                                 rectWidth.Value * widthRatio, size,
                                 type.DefaultAspectRatio, rotation, invert,
                                 feather / 100, roundCorner.Value / 100);
-            this.Mask = mask;
-            ExtraMaterialRefs.Add(mask.GlobalId);
+            Mask = mask;
+            AddExtraMaterialRef(mask.GlobalId);
             return this;
         }
 
@@ -464,8 +418,8 @@ namespace JyDraft
                 throw new InvalidOperationException("当前片段已有转场");
 
             int dur = duration is string s ? Convert.ToInt32(TimeUtil.SrtTstamp(s)) : Convert.ToInt32(duration);
-            this.Transition = new Transition(type, dur);
-            ExtraMaterialRefs.Add(Transition.GlobalId);
+            Transition = new Transition(type, dur);
+            AddExtraMaterialRef(Transition.GlobalId);
             return this;
         }
 
@@ -474,15 +428,41 @@ namespace JyDraft
             if (BackgroundFilling != null)
                 throw new InvalidOperationException("已有背景填充");
 
-            if (fillType == "blur")
-                BackgroundFilling = new BackgroundFilling("canvas_blur", blur, color);
-            else if (fillType == "color")
-                BackgroundFilling = new BackgroundFilling("canvas_color", blur, color);
-            else
-                throw new ArgumentException($"无效的背景填充类型 {fillType}");
+            BackgroundFilling = fillType switch
+            {
+                "blur" => new BackgroundFilling("canvas_blur", blur, color),
+                "color" => new BackgroundFilling("canvas_color", blur, color),
+                _ => throw new ArgumentException($"无效的背景填充类型 {fillType}")
+            };
 
-            ExtraMaterialRefs.Add(BackgroundFilling.GlobalId);
+            AddExtraMaterialRef(BackgroundFilling.GlobalId);
             return this;
+        }
+
+        internal override void CollectMaterials(ScriptMaterial materials)
+        {
+            if (AnimationsInstance != null && !materials.Animations.Contains(AnimationsInstance))
+                materials.Animations.Add(AnimationsInstance);
+
+            foreach (var effect in _effects)
+                if (!materials.VideoEffects.Contains(effect))
+                    materials.VideoEffects.Add(effect);
+
+            foreach (var filter in _filters)
+                if (!materials.Filters.Contains(filter))
+                    materials.Filters.Add(filter);
+
+            if (Mask != null)
+                materials.Masks.Add(Mask.ExportJson());
+
+            if (Transition != null && !materials.Transitions.Contains(Transition))
+                materials.Transitions.Add(Transition);
+
+            if (BackgroundFilling != null)
+                materials.Canvases.Add(BackgroundFilling);
+
+            materials.Speeds.Add(Speed);
+            materials.AddMaterial(MaterialInstance);
         }
 
         public override Dictionary<string, object> ExportJson()
@@ -506,7 +486,7 @@ namespace JyDraft
         /// <summary>
         /// 贴纸资源id
         /// </summary>
-        public string ResourceId { get; set; }
+        public string ResourceId { get; }
 
         /// <summary>
         /// 根据贴纸resource_id构建一个贴纸片段, 并指定其时间信息及图像调节设置
@@ -519,6 +499,11 @@ namespace JyDraft
             : base(Guid.NewGuid().ToString(), null, targetTimerange, 1.0, 1.0, clipSettings)
         {
             this.ResourceId = resourceId;
+        }
+
+        internal override void CollectMaterials(ScriptMaterial materials)
+        {
+            materials.Stickers.Add(ExportMaterial());
         }
 
         /// <summary>

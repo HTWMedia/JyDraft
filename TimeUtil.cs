@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -61,18 +62,46 @@ namespace JyDraft
                 Duration = duration;
             }
 
-            public static Timerange ImportJson(string jsonObj)
+            /// <summary>
+        /// 从草稿 JSON 里解析时间区间。真实草稿是 {"start":..,"duration":..}，
+        /// 早期写法是 "[start=.., end=..]"，两种都认（原实现只认后者，导致导入自己的草稿必炸）。
+        /// </summary>
+        public static Timerange ImportJson(object jsonObj)
+        {
+            if (jsonObj == null) return null;
+
+            if (jsonObj is Dictionary<string, object> dict)
+                return FromParts(dict, jsonObj.ToString());
+
+            var text = jsonObj.ToString();
+            if (text.TrimStart().StartsWith("{"))
             {
-                var match = Regex.Match(jsonObj, @"^\[start=(\d+),\s*end=(\d+)\]$");
-                if (!match.Success)
-                    throw new FormatException("Invalid format");
-
-                return new Timerange(int.Parse(match.Groups[1].Value),int.Parse(match.Groups[2].Value)- int.Parse(match.Groups[1].Value));
-
-                //return new Timerange(int.Parse(jsonObj["start"]), int.Parse(jsonObj["duration"]));
+                var jo = JObject.Parse(text);
+                return FromParts(new Dictionary<string, object>
+                {
+                    ["start"] = jo["start"]?.Value<long>() ?? 0L,
+                    ["duration"] = jo["duration"]?.Value<long>(),
+                    ["end"] = jo["end"]?.Value<long>()
+                }, text);
             }
 
-            public long End => Start + Duration;
+            var match = Regex.Match(text, @"^\[start=(\d+),\s*end=(\d+)\]$");
+            if (!match.Success) throw new FormatException("Invalid format");
+            return new Timerange(int.Parse(match.Groups[1].Value),
+                                 int.Parse(match.Groups[2].Value) - int.Parse(match.Groups[1].Value));
+        }
+
+        private static Timerange FromParts(Dictionary<string, object> parts, string raw)
+        {
+            long start = Convert.ToInt64(parts.GetValueOrDefault("start", 0L) ?? 0L);
+            if (parts.TryGetValue("duration", out var d) && d != null)
+                return new Timerange(start, Convert.ToInt64(d));
+            if (parts.TryGetValue("end", out var e) && e != null)
+                return new Timerange(start, Convert.ToInt64(e) - start);
+            throw new FormatException("Invalid timerange: " + raw);
+        }
+
+public long End => Start + Duration;
 
             public bool Equals(Timerange other)
             {

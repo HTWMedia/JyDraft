@@ -116,7 +116,7 @@ namespace JyDraft
     }
 
     // 文本气泡
-    public class TextBubble
+    public class TextBubble : IDraftExportable
     {
         public string GlobalId { get; private set; }
         public string EffectId { get; set; }
@@ -167,8 +167,8 @@ namespace JyDraft
         public TextBorder Border { get; set; }
         public TextBackground Background { get; set; }
 
-        public TextBubble Bubble { get; set; }
-        public TextEffect Effect { get; set; }
+        public TextBubble Bubble { get; private set; }
+        public TextEffect Effect { get; private set; }
 
         public TextSegment(string text, Timerange timerange,
             EffectMeta font = null,
@@ -204,9 +204,7 @@ namespace JyDraft
 
             if (template.AnimationsInstance != null)
             {
-                newSegment.AnimationsInstance = template.AnimationsInstance;
-                newSegment.AnimationsInstance.AnimationId = Guid.NewGuid().ToString();
-                newSegment.ExtraMaterialRefs.Add(newSegment.AnimationsInstance.AnimationId);
+                newSegment.AdoptAnimationsFrom(template);
             }
 
             if (template.Bubble != null)
@@ -250,28 +248,36 @@ namespace JyDraft
                 throw new ArgumentException($"Invalid animation type: {animationType.GetType()}");
             }
 
-            if (AnimationsInstance == null)
-            {
-                AnimationsInstance = new SegmentAnimations();
-                ExtraMaterialRefs.Add(AnimationsInstance.AnimationId);
-            }
-
-            AnimationsInstance.AddAnimation(new TextAnimation(meta, animationType, start, dur));
+            EnsureAnimations().AddAnimation(new TextAnimation(meta, animationType, start, dur));
             return this;
         }
 
         public TextSegment AddBubble(string effectId, string resourceId)
         {
             Bubble = new TextBubble(effectId, resourceId);
-            ExtraMaterialRefs.Add(Bubble.GlobalId);
+            AddExtraMaterialRef(Bubble.GlobalId);
             return this;
         }
 
         public TextSegment AddEffect(string effectId)
         {
             Effect = new TextEffect(effectId, effectId);
-            ExtraMaterialRefs.Add(Effect.GlobalId);
+            AddExtraMaterialRef(Effect.GlobalId);
             return this;
+        }
+
+        internal override void CollectMaterials(ScriptMaterial materials)
+        {
+            if (AnimationsInstance != null && !materials.Animations.Contains(AnimationsInstance))
+                materials.Animations.Add(AnimationsInstance);
+
+            if (Bubble != null)
+                materials.Filters.Add(Bubble);
+
+            if (Effect != null)
+                materials.Filters.Add(Effect);
+
+            materials.Texts.Add(ExportMaterial());
         }
 
         public Dictionary<string, object> ExportMaterial()

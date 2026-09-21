@@ -1,5 +1,6 @@
 ﻿
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,6 +11,15 @@ using System.Threading.Tasks;
 
 namespace JyDraft
 {
+    /// <summary>
+    /// MediaInfo 要求传入 ILogger：传 null 会在其内部 LogDebug 时抛 ArgumentNullException。
+    /// 这里共享一个空实现，避免每个素材都 new 一个 Console LoggerFactory。
+    /// </summary>
+    internal static class MediaLog
+    {
+        internal static readonly ILogger Instance = NullLogger.Instance;
+    }
+
     public class CropSettings
     {
         // 各属性均在0-1之间
@@ -79,13 +89,9 @@ namespace JyDraft
             string ext = System.IO.Path.GetExtension(path).ToLower();
 
             // 用第三方库读取媒体信息，以下为伪代码
-            var loggerFactory = LoggerFactory.Create(builder =>
-            {
-                builder.AddConsole();
-            });
 
 
-            var mediaInfo = new MediaInfo.MediaInfoWrapper(path, null);
+            var mediaInfo = new MediaInfo.MediaInfoWrapper(path, MediaLog.Instance);
 
             // bool canParse = true; // 伪逻辑
             bool canParse = true;
@@ -249,13 +255,9 @@ namespace JyDraft
                 throw new ArgumentException($"不支持的音频素材类型 {System.IO.Path.GetExtension(path)}");
 
             // 用第三方库读取音频信息，以下为伪代码
-            var loggerFactory = LoggerFactory.Create(builder =>
-            {
-                builder.AddConsole();
-            });
 
 
-            var mediaInfo = new MediaInfo.MediaInfoWrapper(path,null);
+            var mediaInfo = new MediaInfo.MediaInfoWrapper(path, MediaLog.Instance);
 
             if (mediaInfo.HasVideo)
                 throw new ArgumentException("音频素材不应包含视频轨道");

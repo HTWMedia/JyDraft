@@ -13,7 +13,7 @@ namespace JyDraft
     public static class Util
     {
         // JsonExportable 的 C# 近似类型
-        public interface IJsonExportable
+        public interface IDraftExportable
         {
             object ExportJson();
             void ImportJson(object data);
@@ -69,9 +69,9 @@ namespace JyDraft
                 if (prop == null) continue;
 
                 var propType = prop.PropertyType;
-                if (typeof(IJsonExportable).IsAssignableFrom(propType))
+                if (typeof(IDraftExportable).IsAssignableFrom(propType))
                 {
-                    var instance = (IJsonExportable)Activator.CreateInstance(propType);
+                    var instance = (IDraftExportable)Activator.CreateInstance(propType);
                     instance.ImportJson(jsonData[attr]);
                     prop.SetValue(obj, instance);
                 }
@@ -96,7 +96,7 @@ namespace JyDraft
                 if (prop == null) continue;
 
                 var value = prop.GetValue(obj);
-                if (value is IJsonExportable exportable)
+                if (value is IDraftExportable exportable)
                 {
                     jsonData[attr] = exportable.ExportJson();
                 }
