@@ -1,401 +1,312 @@
-[中文](README.md) | English
+<div align="center">
 
-# JyDraft
+# HDraft · Batch Render Jianying / CapCut Drafts
 
-**JyDraft** is a toolkit for **generating Jianying / CapCut draft files and rendering them directly into videos**.
-It allows you to programmatically generate draft files and render videos in the cloud **without installing the CapCut client**.
+**Turn "export drafts one by one in CapCut" into a single command.**
 
-👉 Precompiled HDraft CLI tools can be downloaded from the **Releases** page on the right side of GitHub.
+Your drafts already live in CapCut's project folder — but exporting them means clicking
+through each one and waiting. HDraft reads draft projects directly, decrypts them,
+collects assets, uploads them, renders in the cloud concurrently, and writes the
+finished video back next to the draft.
 
----
+[![Release](https://img.shields.io/github/v/release/HTWMedia/JyDraft?label=HDraft)](https://github.com/HTWMedia/JyDraft/releases)
+[![Downloads](https://img.shields.io/github/downloads/HTWMedia/JyDraft/total)](https://github.com/HTWMedia/JyDraft/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/HTWMedia/JyDraft/releases)
 
-## ✨ Features
+English ｜ [简体中文](README.md) ｜ [Download](https://github.com/HTWMedia/JyDraft/releases)
 
-* Generate CapCut draft files (`draft_content.json`) using C#
-* Support for audio, video, GIF, and text tracks and segments
-* Support transitions, animations, subtitle bubbles, background filling, and more
-* Built-in support for **automatic decryption of encrypted drafts**
-* Support **concurrent rendering of multiple drafts**
-* No CapCut client installation required
-* Cloud-based rendering with low local hardware requirements
+</div>
 
 ---
 
-## 📦 Usage Guide
+## Why it exists
 
-## 1. Generate a CapCut Draft
+CapCut (Jianying) is great for editing — and painful for batch exporting:
 
-The following example demonstrates how to generate a complete CapCut draft using code and export it as a JSON string.
+| Today | With HDraft |
+| --- | --- |
+| Open CapCut → open draft → export → wait → next one | List your drafts, run one command, walk away |
+| One export at a time, babysitting the progress bar | Multiple drafts processed concurrently |
+| Export maxes out your CPU / GPU | Rendering happens in the cloud; your machine only packs and uploads |
+| Batching, scheduling, or integrating is nearly impossible | CLI + HTTP API — scriptable and composable by design |
 
-### 1️⃣ Create a Draft File
+**Good for**: daily matrix accounts (dozens of similar drafts per batch), templated
+mass production, wiring rendering into your own pipeline, or rendering on a machine
+that has no CapCut installed at all.
+
+---
+
+## 30-second start
+
+### 1. Download
+
+Grab the archive for your platform from
+[Releases](https://github.com/HTWMedia/JyDraft/releases) and unzip — no installer:
+
+| Platform | File |
+| --- | --- |
+| Windows x64 | `HDraft_win-x64.zip` |
+| macOS Intel | `HDraft_osx-x64.zip` |
+| macOS Apple Silicon | `HDraft_osx-arm64.zip` |
+
+### 2. Get an AuthKey
+
+Visit <https://htwmedia.dpdns.org/Home/GetApiKey>, enter your email, and the key is
+mailed to you. The AuthKey is only an **anti-abuse gate** — new accounts start with a
+1-month free quota.
+
+### 3. Point it at your drafts
+
+Edit `config.ini` next to the executable:
+
+```ini
+(!do not delete this line)  DraftPath：C:\Users\you\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\Feb-09\draft_content.json
+authKey:your-key
+```
+
+- Separate multiple drafts with a pipe `|`;
+- You can also pass a **folder** — HDraft scans its subdirectories for drafts;
+- Keep the `(!do not delete this line)` marker at the start of the first line.
+
+> Prefer not to edit files? Just run `HDraft` and type the AuthKey and draft paths
+> when prompted.
+
+### 4. Run
+
+```bash
+HDraft          # start processing
+HDraft --help   # usage
+```
+
+Each step is printed so you can follow along. Finished videos land in the **draft's own
+folder**, named like `生成视频_20260209_153012.mp4`.
+
+---
+
+## What actually happens
+
+```
+Draft project folder
+   │  ① read draft_content.json (auto-decrypt if encrypted)
+   │  ② parse the draft, collect referenced video / image / audio assets
+   │  ③ convert GIFs to their first PNG frame
+   ▼
+Upload assets to the cloud (local machine only packs; 4-way concurrency)
+   ▼
+④ Cloud rendering: create task → poll progress
+   ▼
+⑤ Download the result → write next to the draft → clean up temp files
+```
+
+Details you may care about:
+
+- **Encrypted drafts are handled for you** — CapCut encrypts drafts since 5.9; no manual step;
+- **Drafts don't have to come from CapCut** — a generated `draft_content.json` renders just as well (see below);
+- **Your machine stays usable** — rendering is cloud-side; once upload finishes you can close the window;
+- **Assets are not retained** — temporary cloud assets are deleted when the task ends.
+
+---
+
+## Where drafts come from
+
+### ① Reuse your CapCut project drafts (most common)
+
+Default location on Windows:
+
+```
+C:\Users\<you>\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\<draft-name>\draft_content.json
+```
+
+Not sure? Right-click the draft in CapCut → "Open draft folder".
+
+### ② Generate drafts from code (batching / templating)
+
+The C# sources at the repo root (`ScriptFile.cs`, `VideoSegment.cs`, `AudioSegment.cs`, …)
+form a lightweight draft-generation library — you can assemble a whole video without
+ever opening CapCut:
 
 ```csharp
-var script = new ScriptFile(1920, 1080);
+var script = new ScriptFile(1920, 1080);          // canvas size
 script.Content["id"] = draftId;
 
-// Add tracks
-script
-    .AddTrack(TrackTypeName.audio)
-    .AddTrack(TrackTypeName.video)
-    .AddTrack(TrackTypeName.text);
-```
+script.AddTrack(TrackTypeName.audio)
+      .AddTrack(TrackTypeName.video)
+      .AddTrack(TrackTypeName.text);
 
-### 2️⃣ Prepare Assets
-
-```csharp
-var assetDir = @"D:\pyJianYingDraft\readme_assets\tutorial";
-
-var audioPath = Path.Combine(assetDir, "audio.mp3");
-var audioMaterial = new AudioMaterial(audioPath);
-
-var videoPath = Path.Combine(assetDir, "video.mp4");
-var videoMaterial = new VideoMaterial(videoPath);
-
-var gifPath = Path.Combine(assetDir, "sticker.gif");
-var gifMaterial = new VideoMaterial(gifPath);
-```
-
-### 3️⃣ Create Segments and Apply Effects
-
-```csharp
 var audioSegment = new AudioSegment(
-    audioMaterial,
+    new AudioMaterial(@"D:\assets\audio.mp3"),
     TimeUtil.Trange(0, "5s"),
-    volume: 0.6f
-);
-audioSegment.AddFade("1s", 0);
+    volume: 0.6f);
+audioSegment.AddFade("1s", 0);                    // fade in
 
 var videoSegment = new VideoSegment(
-    videoMaterial,
-    TimeUtil.Trange(0, "4.2s")
-);
-videoSegment.AddAnimation(IntroType.斜切);
-videoSegment.AddTransition(TransitionType.信号故障);
-```
+    new VideoMaterial(@"D:\assets\video.mp4"),
+    TimeUtil.Trange(0, "4.2s"));
+videoSegment.AddAnimation(IntroType.斜切);        // intro animation
+videoSegment.AddTransition(TransitionType.信号故障); // transition
 
-### 4️⃣ Add Text
-
-```csharp
 var textSegment = new TextSegment(
-    "JyDraft works great!",
+    "Heard HDraft works pretty well?",
     videoSegment.TargetTimerange,
     font: FontType.文轩体,
     style: new TextStyle(color: new[] { 1.0f, 1.0f, 0.0f }),
-    clipSettings: new ClipSettings(transformY: -0.8f)
-);
+    clipSettings: new ClipSettings(transformY: -0.8f));
 
-textSegment.AddAnimation(
-    Text_outro.故障闪动,
-    "out",
-    duration: TimeUtil.Tim("1s")
-);
-textSegment.AddBubble("361595", "6742029398926430728");
+script.AddSegment(audioSegment)
+      .AddSegment(videoSegment)
+      .AddSegment(textSegment);
+
+var json = script.Dumps();                        // write out as draft_content.json
 ```
 
-### 5️⃣ Assemble and Export the Draft
+Supported: audio / video / image / GIF / text tracks and segments, keyframes,
+transitions, animations, subtitle bubbles, background filling, filters and effects
+(metadata for effects lives under `meta/`).
 
-```csharp
-script
-    .AddSegment(audioSegment)
-    .AddSegment(videoSegment)
-    .AddSegment(textSegment);
+### ③ Decrypt an encrypted draft
 
-var json = script.Dumps();
-```
+If all you have is an encrypted `draft_content.json` and you want to inspect or tweak it
+before rendering, call the `DecryptDraft` endpoint (see integration below) to get
+plaintext JSON back.
 
 ---
 
-## 🚀 Draft-to-Video Automated Rendering API
+## Integrating it
 
-### 🔑 Authentication (API Key)
+The CLI covers most cases. If you want to embed rendering into your own platform,
+schedule it, or build on top of it, use the HTTP API. Every request carries the header
+`AuthKey: <your key>` (`X-API-KEY` also accepted).
 
-#### 1️⃣ Get AuthKey
+### Simple flow: upload a ZIP
 
-Visit the website and obtain your AuthKey directly from the **"获取AuthKey"** menu:
+Best when the package is small and you want the fewest lines of code.
 
-➡️ **https://htwmedia.dpdns.org/Home/GetApiKey**
+| Step | Endpoint | Notes |
+| --- | --- | --- |
+| 1 | `POST /Home/UploadDraftPackage` | `multipart/form-data` ZIP containing `draft_content.json` + all assets |
+| 2 | `POST /Home/StartRender?draftId={id}` | Starts rendering, returns `taskId` |
+| 3 | `GET /Home/GetStatus?taskId={id}` | Poll `Status` / `Progress` / `DownloadUrl` |
 
-Enter your email and click the button — the AuthKey will be sent to your email inbox.
-
-> Alternatively, you can still use the legacy API:
-> ```
-> POST https://htwmedia.dpdns.org/auth/applykey?email=your@email.com
-> Header: X-App-Source: HDraft
-> ```
-
-#### 2️⃣ Use AuthKey in API Calls
-
-Include the AuthKey in every API request header:
-
-```
-X-API-KEY: <your authkey>
-```
-
-or
-
-```
-AuthKey: <your authkey>
-```
-
----
-
-### 🖥️ Try Online Before Coding
-
-You can test the full draft-to-video pipeline directly in your browser:
-
-1. Go to **https://htwmedia.dpdns.org/WebAI/Index**
-2. Log in with your email
-3. Use the **"草稿成片" (Draft to Video)** feature under the **"在线体验"** menu
-4. Upload your draft ZIP package and wait for the rendered video
-
-This is a great way to validate your draft package before automating with the API.
-
----
-
-### 📦 HDraft CLI Tool
-
-The **HDraft** command-line tool allows you to batch-export drafts without writing any code:
-
-1. Download the latest `HDraft.exe` from **[Releases](https://github.com/HTWMedia/JyDraft/releases)** (right sidebar on GitHub)
-2. Configure `config.ini` with your draft paths (separate multiple drafts with `|`)
-3. Run `HDraft.exe` — it will automatically decrypt encrypted drafts, upload and render them
-
-The tool supports:
-- Concurrent rendering of multiple drafts
-- Automatic decryption of encrypted drafts
-- No CapCut client installation required
-
----
-
-## 🔐 Encrypted Draft Decryption API
-
-```
-POST https://htwmedia.dpdns.org/home/DecryptDraft
-```
-
-### Request
-
-* Method: `POST`
-* Content-Type: `multipart/form-data`
-* Headers: `X-API-KEY: <your authkey>`
-
-### Parameters
-
-| Name     | Type | Required | Description                                 |
-| -------- | ---- | -------- | ------------------------------------------- |
-| jsonFile | File | Yes      | Encrypted Jianying / CapCut draft JSON file |
-
-> ⚠️ Notes:
->
-> * The draft must be uploaded as a **file**
-> * URL parameters are **not supported**
-> * Base64 payloads are **not supported**
-
----
-
-## 📦 Complete Rendering Flow
-
-### Step 1: Package Your Draft
-
-Create a ZIP file containing:
+ZIP layout (asset paths must match the references inside the JSON):
 
 ```
 my_draft.zip
-├── draft_content.json      # Required: your draft JSON
-├── video.mp4               # Video asset referenced in draft
-├── audio.mp3               # Audio asset referenced in draft
-├── image.png               # Image asset referenced in draft
-└── ...                     # Any other files referenced in draft
+├── draft_content.json
+├── video.mp4
+├── audio.mp3
+└── image.png
 ```
 
-> The `draft_content.json` can be generated using JyDraft's C# code, or decrypted from an encrypted CapCut draft. Assets should be placed at paths matching those in the `draft_content.json` file.
+### Chunked flow: upload assets one by one (what HDraft itself uses)
 
-### Step 2: Upload Draft Package
+Better for large files, instant-upload dedupe, resumable transfers, or when you manage
+assets yourself.
 
+```text
+POST /Home/CreateAssetUpload   { md5, size, crc32, filename, file_type } → upload_id / space_id / token
+      ↓ stream bytes to cloud storage
+POST /Home/CommitAssetUpload   { upload_id, space_id, md5, filename, size } → asset_id
+      ↓ (repeat for every asset)
+POST /Home/SaveDraft           { draftJson, title, packageAssets } → draftId
+POST /Home/RenderDraft         { draftId } → taskId
+GET  /Home/GetStatus?taskId=…  → Status / Progress / DownloadUrl
 ```
-POST https://htwmedia.dpdns.org/home/UploadDraftPackage
-Content-Type: multipart/form-data
-X-API-KEY: <your authkey>
-```
 
-| Parameter | Type | Required | Description                        |
-| --------- | ---- | -------- | ---------------------------------- |
-| file      | File | Yes      | ZIP package of draft + all assets  |
+`GetStatus` response example:
 
-Response:
 ```json
-{
-  "success": true,
-  "draftId": "{DRAFT_ID}",
-  "files": 5
-}
+{ "Status": "completed", "Progress": 100, "DownloadUrl": "https://..." }
 ```
 
-### Step 3: Start Rendering
+### Other endpoints
 
-```
-POST https://htwmedia.dpdns.org/home/StartRender?draftId={DRAFT_ID}
-X-API-KEY: <your authkey>
-```
+| Endpoint | Method | Notes |
+| --- | --- | --- |
+| `/Home/GetApiKey` | GET | Web page to request an AuthKey (recommended) |
+| `/auth/applykey?email=` | POST | Request an AuthKey via API (sent by email) |
+| `/Home/DecryptDraft` | POST | Upload an encrypted draft JSON via `multipart/form-data`, get plaintext `draft_content` |
 
-Response:
-```json
-{
-  "success": true,
-  "taskId": "{TASK_ID}"
-}
-```
-
-### Step 4: Query Rendering Status
-
-```
-GET https://htwmedia.dpdns.org/home/GetStatus?taskId={TASK_ID}
-X-API-KEY: <your authkey>
-```
-
-Response (in progress):
-```json
-{
-  "Status": "running",
-  "Progress": 45,
-  "DownloadUrl": null
-}
-```
-
-Response (completed):
-```json
-{
-  "Status": "completed",
-  "Progress": 100,
-  "DownloadUrl": "https://..."
-}
-```
+> The API keeps evolving — trust the actual response over this page. Questions welcome as issues.
 
 ---
 
-## 💻 Python Example (Complete Flow)
+## FAQ
 
-```python
-import requests
-import time
+<details>
+<summary><b>Do I need CapCut installed?</b></summary>
 
-BASE_URL = "https://htwmedia.dpdns.org"
-API_KEY = "your_authkey"
+No. HDraft reads CapCut's draft project files and renders in the cloud, so it runs fine
+on machines — or servers — without CapCut.
+</details>
 
-headers = {"X-API-KEY": API_KEY}
+<details>
+<summary><b>How do I find my draft path?</b></summary>
 
-# Step 1: Upload draft package (ZIP containing draft_content.json + assets)
-with open("my_draft.zip", "rb") as f:
-    res = requests.post(
-        f"{BASE_URL}/home/UploadDraftPackage",
-        headers=headers,
-        files={"file": f}
-    )
+Right-click the draft in CapCut → "Open draft folder"; `draft_content.json` is inside.
+You can also put a **folder path** into `config.ini` and HDraft will scan subdirectories.
+</details>
 
-data = res.json()
-draft_id = data["draftId"]
-print(f"Draft uploaded: {draft_id}")
+<details>
+<summary><b>It says assets are missing / my render is missing clips?</b></summary>
 
-# Step 2: Start rendering
-res = requests.post(
-    f"{BASE_URL}/home/StartRender",
-    headers=headers,
-    params={"draftId": draft_id}
-)
-task_id = res.json()["taskId"]
-print(f"Task created: {task_id}")
+Referenced assets must still exist and be readable. Moving assets or switching machines
+is the usual cause — open the draft once in CapCut to confirm it previews, then hand it
+to HDraft.
+</details>
 
-# Step 3: Poll until complete
-while True:
-    res = requests.get(
-        f"{BASE_URL}/home/GetStatus",
-        headers=headers,
-        params={"taskId": task_id}
-    )
-    status = res.json()
+<details>
+<summary><b>How many run in parallel? How long does it take?</b></summary>
 
-    if status["Status"] == "completed":
-        print(f"Video ready: {status['DownloadUrl']}")
-        video_res = requests.get(status["DownloadUrl"])
-        with open("output.mp4", "wb") as f:
-            f.write(video_res.content)
-        break
-    elif status["Status"] in ("failed", "cancelled"):
-        print("Rendering failed")
-        break
-    else:
-        print(f"Progress: {status.get('Progress', 0)}%")
-        time.sleep(5)
-```
+4-way concurrency by default. Per-video time depends on cloud queue and clip length; in
+batch scenarios the total is usually far faster than exporting by hand.
+</details>
 
-### Python Example (Decrypt Draft)
+<details>
+<summary><b>Where do the videos go?</b></summary>
 
-```python
-import requests
+Into the **draft's own folder**, named like `生成视频_<timestamp>.mp4`.
+</details>
 
-BASE_URL = "https://htwmedia.dpdns.org"
-API_KEY = "your_authkey"
+<details>
+<summary><b>Are my assets kept?</b></summary>
 
-headers = {"X-API-KEY": API_KEY}
-files = {"jsonFile": open("encrypted_draft.json", "rb")}
+No. Assets are used only during rendering and deleted when the task ends (success or
+failure); local temp files are cleaned up too.
+</details>
 
-res = requests.post(
-    f"{BASE_URL}/home/DecryptDraft",
-    headers=headers,
-    files=files
-)
+## Error codes
 
-data = res.json()
-if data["success"]:
-    with open("draft_content.json", "w", encoding="utf-8") as f:
-        f.write(data["draft_content"])
-```
+| Code | Meaning | What to do |
+| --- | --- | --- |
+| 401 | AuthKey missing or invalid | Re-request and fill it in |
+| 402 | Free quota exhausted | Top up on the platform and retry |
+| 400 | Bad request parameters | Check draft package structure and fields |
+| 500 | Internal server error | Retry; open an issue if it persists |
 
 ---
 
-## 📡 API Summary
+## Related
 
-| Endpoint                 | Method | Description                           |
-| ------------------------ | ------ | ------------------------------------- |
-| /auth/applykey           | POST   | Apply for API Key (email delivery)    |
-| /Home/GetApiKey          | GET    | Get AuthKey from website (recommended)|
-| /home/UploadDraftPackage | POST   | Upload draft ZIP package              |
-| /home/StartRender        | POST   | Start rendering a draft               |
-| /home/GetStatus          | GET    | Query rendering progress/result       |
-| /home/DecryptDraft       | POST   | Decrypt encrypted draft               |
+- [HTWMedia/HTWClient](https://github.com/HTWMedia/HTWClient) — the open-source desktop
+  client covering the full loop: topic research → creation → editing → multi-platform
+  publishing. Use HDraft when all you need is batch draft exporting; use HTWClient for
+  the whole workbench.
 
----
+## Contributing
 
-## 💬 Community & Discussion Group
+Issues and PRs welcome. The draft-generation library lives at the repo root — if you
+discover new draft fields or effect parameters, please contribute them to `meta/`.
 
-If you are interested in:
+## Community
 
-* CapCut / Jianying draft structure analysis
-* Draft encryption & decryption
-* Automated rendering pipelines
-* JyDraft development & extensions
+Interested in CapCut / Jianying draft internals, encryption, or automated rendering
+pipelines? Join the chat:
 
-Feel free to join our **discussion group** by scanning the QR code below 👇
+![Community group](qrcode_1785752822479.jpg)
 
-![JyDraft Community QR Code](qrcode_1785752822479.jpg)
+> Technical discussion only — no advertising, please.
 
-> The group is mainly used for **technical discussion and experience sharing**.
-> Please keep conversations focused and respectful.
+## License
 
----
-
-## ❗ Common Error Codes
-
-| Code | Description                          |
-| ---- | ------------------------------------ |
-| 401  | AuthKey missing or invalid           |
-| 402  | AuthKey expired                      |
-| 400  | Invalid parameters                   |
-| 500  | Server internal error                |
-
----
-
-## 📄 License
-
-For learning and technical research purposes only.
-Do **not** use this project in any way that violates CapCut / Jianying terms of service or applicable laws.
+For learning and technical research only. Do not use it in any way that violates the
+CapCut / Jianying terms of service or applicable law.

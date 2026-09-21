@@ -1,0 +1,9 @@
+; HDraft 配置示例 —— 复制为 config.ini 后放在 HDraft 可执行文件同目录
+;
+; 第一行：草稿路径。多个草稿用竖线 | 分隔；也可以直接填文件夹路径，工具会扫描子目录。
+;         行首的 (!此行别删) 是格式标记，请保留。
+(!此行别删)  草稿路径：C:\Users\你\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft\2月9日\draft_content.json
+
+; 第二行：AuthKey。留空则运行时会提示手动输入。
+;         获取地址：https://htwmedia.dpdns.org/Home/GetApiKey
+authKey:你的密钥
