@@ -59,6 +59,9 @@
 
 > macOS 首次运行若提示「无法验证开发者」：`xattr -dr com.apple.quarantine /path/to/HDraft`，或在 Finder 里右键 → 打开。
 
+国内直连 GitHub 慢的话，也可以从官网下载页取同一版本：
+<https://htwmedia.dpdns.org/Home/Download>（直链 `/Home/DownloadFile?fileId=hdraft-win`、`hdraft-mac`、`hdraft-mac-arm`）。
+
 ### 2. 拿到 AuthKey
 
 打开 <https://htwmedia.dpdns.org/Home/GetApiKey>，填入邮箱，Key 会发到邮箱。

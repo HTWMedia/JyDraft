@@ -64,6 +64,10 @@ Grab the archive for your platform from
 > First launch on macOS may show "cannot verify the developer": run
 > `xattr -dr com.apple.quarantine /path/to/HDraft`, or right-click the app → Open.
 
+If GitHub is slow from where you are, the project site serves the same builds:
+<https://htwmedia.dpdns.org/Home/Download> (direct links `/Home/DownloadFile?fileId=hdraft-win`,
+`hdraft-mac`, `hdraft-mac-arm`).
+
 ### 2. Get an AuthKey
 
 Visit <https://htwmedia.dpdns.org/Home/GetApiKey>, enter your email, and the key is
