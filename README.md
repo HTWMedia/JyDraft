@@ -11,7 +11,19 @@
 [![Downloads](https://img.shields.io/github/downloads/HTWMedia/JyDraft/total)](https://github.com/HTWMedia/JyDraft/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/HTWMedia/JyDraft/releases)
 
-简体中文 ｜ [English](README_EN.md) ｜ [下载](https://github.com/HTWMedia/JyDraft/releases)
+简体中文 ｜ [English](README_EN.md) ｜ [下载](https://github.com/HTWMedia/JyDraft/releases) ｜ [更新记录](#更新记录)
+
+</div>
+
+---
+
+## 演示
+
+<div align="center">
+
+[![HDraft 演示：一条命令批量出片](docs/demo/poster.png)](docs/demo/hdraft-demo-720p.mp4)
+
+<sub>50 秒实录（720p）：改两行配置 → 一条命令启动 → 素材秒传跳过 → 云端渲染 → 成片回写草稿目录</sub>
 
 </div>
 
@@ -320,6 +332,47 @@ GET  /Home/GetStatus?taskId=…  → Status / Progress / DownloadUrl
 | 402 | 免费额度已用完 | 到平台充值后重试 |
 | 400 | 请求参数有误 | 检查草稿包结构与字段 |
 | 500 | 服务端内部错误 | 重试；持续出现请开 Issue |
+
+---
+
+## 更新记录
+
+当前版本 **[v1.7.0](https://github.com/HTWMedia/JyDraft/releases/tag/v1.7.0)**（2026-10-30），
+完整历史与各版本安装包见 [Releases](https://github.com/HTWMedia/JyDraft/releases)。
+
+<details open>
+<summary><b>v1.7.0 · 额度安全与可自动化</b></summary>
+
+**新增**
+
+- **按账号档位自动并发**：启动时读取账号档位（免费 1 / 个人 2 / 工作室 4 / 企业 10），
+  不再固定 4 路，免费账号不会连环触发 429；`--jobs N` 可手动覆盖；
+- **遵守 429 `Retry-After`**：按服务端下发的等待时长重试（缺省 5 秒，最长 120 秒）；
+- **渲染任务断点续传**：taskId 记录在 `hdraft_tasks.json`，重跑先查状态，
+  渲染中继续等待、已完成直接下载，不重复上传素材、不重复提交、不重复扣额度；
+- **退出码与非交互参数**：`--draft` / `--jobs` / `--no-pause` / `--help`，
+  退出码 0–4 区分成功、失败、用法错误、认证失败、额度用完，便于接计划任务与 CI。
+
+**改进**
+
+- 草稿路径自动 trim 并去重，同一草稿只处理一次；
+- 需要输入但 stdin 被重定向时直接报错，不再挂起等待。
+
+**已知限制**
+
+- 使用剪映「曲库」音乐（`music_id` / `effect_id`）的草稿会返回 `200403`，
+  换成同目录的本地音频文件即可正常渲染。
+
+</details>
+
+<details>
+<summary><b>v1.6.0 · 新版剪映草稿支持</b></summary>
+
+- 支持新版剪映 `Timelines` 目录结构；解密失败时自动生成 `draft_content.plain.json` 便于排查；
+- 修复渲染轮询被网络抖动误判失败：改为持续轮询，连续 10 次失败才判定；
+- 移除沿用剪映 Cookie 的隐式行为，失败时改为明确提示，不再静默污染账号。
+
+</details>
 
 ---
 

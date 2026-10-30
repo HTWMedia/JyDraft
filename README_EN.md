@@ -13,7 +13,19 @@ finished video back next to the draft.
 [![Downloads](https://img.shields.io/github/downloads/HTWMedia/JyDraft/total)](https://github.com/HTWMedia/JyDraft/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/HTWMedia/JyDraft/releases)
 
-English ｜ [简体中文](README.md) ｜ [Download](https://github.com/HTWMedia/JyDraft/releases)
+English ｜ [简体中文](README.md) ｜ [Download](https://github.com/HTWMedia/JyDraft/releases) ｜ [Changelog](#changelog)
+
+</div>
+
+---
+
+## Demo
+
+<div align="center">
+
+[![HDraft demo: one command, a batch of finished videos](docs/demo/poster.png)](docs/demo/hdraft-demo-720p.mp4)
+
+<sub>50-second recording (720p): fill in two config lines → run one command → assets reused → cloud render → MP4 written back next to the draft</sub>
 
 </div>
 
@@ -339,6 +351,51 @@ The binaries are not signed/notarized by Apple. Run
 | 402 | Free quota exhausted | Top up on the platform and retry |
 | 400 | Bad request parameters | Check draft package structure and fields |
 | 500 | Internal server error | Retry; open an issue if it persists |
+
+---
+
+## Changelog
+
+Latest: **[v1.7.0](https://github.com/HTWMedia/JyDraft/releases/tag/v1.7.0)** (2026-10-30).
+Full history and per-version builds live in [Releases](https://github.com/HTWMedia/JyDraft/releases).
+
+<details open>
+<summary><b>v1.7.0 · quota safety & automation</b></summary>
+
+**New**
+
+- **Concurrency follows your account tier**: read at startup (Free 1 / Personal 2 / Studio 4 /
+  Enterprise 10) instead of a fixed 4, so free accounts no longer chain-trigger 429s;
+  override with `--jobs N`;
+- **Respects 429 `Retry-After`**: retries with the server-provided delay (5s default, 120s cap);
+- **Resumable render tasks**: taskIds are persisted in `hdraft_tasks.json`; re-running checks
+  status first — keep waiting if rendering, download if done, never re-upload, resubmit, or
+  double-charge;
+- **Exit codes & non-interactive flags**: `--draft` / `--jobs` / `--no-pause` / `--help`,
+  with exit codes 0–4 for success, failure, usage error, auth failure, and quota exhausted.
+
+**Improved**
+
+- Draft paths are trimmed and de-duplicated, so the same draft is processed once;
+- When input is required but stdin is redirected, it fails fast instead of hanging.
+
+**Known limitation**
+
+- Drafts using Jianying's built-in music library (`music_id` / `effect_id`) return `200403`;
+  replace it with a local audio file and re-export.
+
+</details>
+
+<details>
+<summary><b>v1.6.0 · new Jianying draft format</b></summary>
+
+- Supports the new `Timelines` directory layout; on decrypt failure it writes
+  `draft_content.plain.json` to help debugging;
+- Fixed render polling being marked failed on network hiccups — now keeps polling and only
+  gives up after 10 consecutive failures;
+- Removed the implicit reuse of the Jianying session cookie, with explicit errors instead.
+
+</details>
 
 ---
 
