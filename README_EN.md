@@ -49,6 +49,9 @@ Grab the archive for your platform from
 | macOS Intel | `HDraft_osx-x64.zip` |
 | macOS Apple Silicon | `HDraft_osx-arm64.zip` |
 
+> First launch on macOS may show "cannot verify the developer": run
+> `xattr -dr com.apple.quarantine /path/to/HDraft`, or right-click the app → Open.
+
 ### 2. Get an AuthKey
 
 Visit <https://htwmedia.dpdns.org/Home/GetApiKey>, enter your email, and the key is
@@ -74,12 +77,42 @@ authKey:your-key
 ### 4. Run
 
 ```bash
-HDraft          # start processing
-HDraft --help   # usage
+HDraft                      # start processing (reads config.ini)
+HDraft --draft <path>       # override the draft file/folder for this run
+HDraft --jobs 2             # how many drafts at once (default: by account tier)
+HDraft --no-pause           # exit without waiting for a key press (scripts / CI)
+HDraft --help               # usage
 ```
 
 Each step is printed so you can follow along. Finished videos land in the **draft's own
-folder**, named like `生成视频_20260209_153012.mp4`.
+folder**, named like `渲染视频20261030153012.mp4`.
+
+#### Concurrency and quota
+
+- Concurrency is chosen automatically by **account tier** (free 1, personal 2, studio 4,
+  enterprise 10); `--jobs N` overrides it;
+- When the server rate-limits you (429), HDraft waits for the `Retry-After` it sends;
+- Quota is charged when a render is submitted; failed tasks are not charged.
+
+#### Resume after interruption
+
+Once a render is submitted, its taskId is stored in `hdraft_tasks.json` next to the
+executable. If the program is closed, the network drops, or the download fails, **running
+the same command again will not resubmit the render**: an in-progress task keeps being
+polled, a finished one is downloaded directly — no quota is charged twice. The record is
+invalidated when the draft content changes; pass `--no-resume` to force a resubmission.
+
+#### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | All succeeded |
+| 1 | Some drafts failed |
+| 2 | Configuration or usage error |
+| 3 | AuthKey rejected |
+| 4 | Quota exhausted |
+
+It also prints "成功 X，失败 Y，跳过 Z" at the end, which makes scripting and CI easy.
 
 ---
 
@@ -91,7 +124,7 @@ Draft project folder
    │  ② parse the draft, collect referenced video / image / audio assets
    │  ③ convert GIFs to their first PNG frame
    ▼
-Upload assets to the cloud (local machine only packs; 4-way concurrency)
+Upload assets to the cloud (local machine only packs; concurrency depends on account tier)
    ▼
 ④ Cloud rendering: create task → poll progress
    ▼
@@ -261,21 +294,41 @@ to HDraft.
 <details>
 <summary><b>How many run in parallel? How long does it take?</b></summary>
 
-4-way concurrency by default. Per-video time depends on cloud queue and clip length; in
-batch scenarios the total is usually far faster than exporting by hand.
+Concurrency is decided by your **account tier** (free 1, personal 2, studio 4,
+enterprise 10); override it with `--jobs N`. Per-video time depends on cloud queue and
+clip length; in batch scenarios the total is usually far faster than exporting by hand.
 </details>
 
 <details>
 <summary><b>Where do the videos go?</b></summary>
 
-Into the **draft's own folder**, named like `生成视频_<timestamp>.mp4`.
+Into the **draft's own folder**, named like `渲染视频20261030153012.mp4`.
 </details>
 
 <details>
 <summary><b>Are my assets kept?</b></summary>
 
-No. Assets are used only during rendering and deleted when the task ends (success or
-failure); local temp files are cleaned up too.
+Not long-term. Cloud rendering requires the draft and its assets to be uploaded to
+Jianying's cloud and this project's server during rendering; temporary cloud assets are
+deleted when the task ends (success or failure), and local temp files are cleaned up too.
+If your assets are sensitive or unreleased, weigh that before using cloud rendering.
+</details>
+
+<details>
+<summary><b>Render fails with 200403 / library music?</b></summary>
+
+If the draft uses music from the Jianying library (material carrying `music_id` /
+`effect_id`), the render fails with `200403 create render task failed` — that music is
+licensed to the original account, and the rendering account cannot resolve it. Replace it
+with a **local audio file** and export again. In testing, the same draft rendered fine
+after removing only the library-music track.
+</details>
+
+<details>
+<summary><b>macOS says "cannot verify the developer"?</b></summary>
+
+The binaries are not signed/notarized by Apple. Run
+`xattr -dr com.apple.quarantine /path/to/HDraft`, or right-click the app in Finder → Open.
 </details>
 
 ## Error codes
@@ -312,5 +365,15 @@ pipelines? Join the chat:
 
 ## License
 
-For learning and technical research only. Do not use it in any way that violates the
-CapCut / Jianying terms of service or applicable law.
+The code in this repository is released under the [Apache License 2.0](LICENSE).
+
+## Disclaimer
+
+- This is an independent third-party tool. It is not affiliated with, authorized by, or
+  endorsed by the operators of Jianying / CapCut.
+- You are responsible for ensuring you have the rights to the drafts, assets, and videos
+  you process, and for complying with the Jianying / CapCut terms of service and
+  applicable law. Account and legal risk arising from use is borne by the user.
+- Music from the Jianying library (`music_id` / `effect_id` pointing at library material)
+  is licensed to the original account; rendering under a different account may return
+  `200403`. Use local audio, or re-add the music in the target account.
