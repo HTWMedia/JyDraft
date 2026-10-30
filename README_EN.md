@@ -359,7 +359,7 @@ discover new draft fields or effect parameters, please contribute them to `meta/
 Interested in CapCut / Jianying draft internals, encryption, or automated rendering
 pipelines? Join the chat:
 
-![Community group](qrcode_1785752822479.jpg)
+<img src="qrcode_1785752822479.jpg" width="260" alt="Community group">
 
 > Technical discussion only — no advertising, please.
 
