@@ -418,7 +418,14 @@ discover new draft fields or effect parameters, please contribute them to `meta/
 ## Community
 
 Interested in CapCut / Jianying draft internals, encryption, or automated rendering
-pipelines? Join the chat:
+pipelines? Join the discussion:
+
+- **Open an issue (always available)**: [Community & group invite #15](https://github.com/HTWMedia/JyDraft/issues/15).
+  Draft fields, effect parameters and rendering issues are all welcome there. You do not need
+  to write code — describing your use case is just as useful. For bugs, please open a
+  [new issue](https://github.com/HTWMedia/JyDraft/issues/new) so it can be tracked.
+- **Chat group**: QR codes expire; the current invite is kept up to date in the comments of
+  issue #15. If the image below no longer works, just leave a comment there.
 
 <img src="qrcode_1785752822479.jpg" width="260" alt="Community group">
 
